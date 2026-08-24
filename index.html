@@ -3,9 +3,28 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="한반도 핀볼 여행 — 핀볼을 튕겨 다음 여행지를 정하세요" />
-    <title>Pinball Travel · 한반도 핀볼 여행</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="핀볼을 당겨 대한민국 다음 여행지를 결정하세요! 나의 여행운을 핀볼이 골라줍니다 🎱" />
+    <title>Pinball Travel · 핀볼이 정해주는 여행지</title>
+
+    <!-- Open Graph / 카카오·인스타그램 공유용 -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://www.pinball-travel.xyz/" />
+    <meta property="og:title" content="🎱 Pinball Travel — 핀볼이 정해주는 대한민국 여행지" />
+    <meta property="og:description" content="플런저를 당겨 핀볼을 발사하세요. 공이 멈춘 곳이 당신의 다음 여행지! 친구에게 공유하면 더 재밌어요 🗺️" />
+    <meta property="og:image" content="https://www.pinball-travel.xyz/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="🎱 Pinball Travel — 핀볼이 정해주는 여행지" />
+    <meta name="twitter:description" content="플런저를 당겨 핀볼을 발사하세요. 공이 멈춘 곳이 당신의 다음 여행지!" />
+    <meta name="twitter:image" content="https://www.pinball-travel.xyz/og-image.png" />
+
+    <!-- Kakao JavaScript SDK -->
+    <script src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js"
+            integrity="sha384-TiCUE00h649CAMonG018J2ujOgDKW/kVWlChEuu4jK2vxfAAD0eZxzCKakxg55G4"
+            crossorigin="anonymous"></script>
+
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5199678305878215"
      crossorigin="anonymous"></script>
   </head>
@@ -77,6 +96,7 @@
       <div id="result-overlay" class="overlay">
         <div class="result-card" id="result-card">
           <div class="card-stamp">TRAVEL PICK</div>
+          <div class="card-announce" id="card-announce">핀볼이 선택했습니다!</div>
           <div class="card-emoji" id="card-emoji">🏝️</div>
           <div class="card-region" id="card-region">제주도</div>
           <div class="card-sub" id="card-sub"></div>
@@ -86,6 +106,43 @@
             <button id="btn-share" class="cta share">📤 결과 공유하기</button>
             <button id="btn-retry" class="cta">🔄 다시 하기</button>
             <button id="btn-home" class="cta ghost">🏠 처음으로</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════ SHARE MODAL ═══════════ -->
+      <div id="share-modal" class="share-modal-overlay">
+        <div class="share-modal">
+          <button class="share-modal-close" id="share-modal-close" aria-label="닫기">✕</button>
+          <div class="share-modal-title">🎱 여행지 공유하기</div>
+          <div class="share-modal-subtitle" id="share-modal-subtitle">핀볼이 고른 여행지를 친구에게 알려보세요!</div>
+          <div class="share-btns">
+            <button class="share-btn share-btn-kakao" id="share-kakao">
+              <span class="share-btn-icon">
+                <svg viewBox="0 0 24 24" fill="currentColor" width="26" height="26">
+                  <path d="M12 3C6.477 3 2 6.477 2 10.8c0 2.7 1.54 5.09 3.9 6.54l-.99 3.66 4.27-2.83A11.3 11.3 0 0 0 12 18.6c5.523 0 10-3.477 10-7.8S17.523 3 12 3z"/>
+                </svg>
+              </span>
+              <span>카카오톡으로 공유</span>
+            </button>
+            <button class="share-btn share-btn-instagram" id="share-instagram">
+              <span class="share-btn-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="26" height="26">
+                  <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
+                  <circle cx="12" cy="12" r="4.5"/>
+                  <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/>
+                </svg>
+              </span>
+              <span>인스타그램에 공유</span>
+            </button>
+            <button class="share-btn share-btn-copy" id="share-copy">
+              <span class="share-btn-icon">🔗</span>
+              <span>링크 복사하기</span>
+            </button>
+            <button class="share-btn share-btn-native" id="share-native">
+              <span class="share-btn-icon">📤</span>
+              <span>다른 앱으로 공유</span>
+            </button>
           </div>
         </div>
       </div>
