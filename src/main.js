@@ -31,8 +31,8 @@ function gameTitle(mode, region) {
   ])
 }
 
-function resultSubtitle(zone) {
-  if (app.mode === 'province') {
+function resultSubtitle(mode, zone) {
+  if (mode === 'province') {
     return pickByKey(zone.key, [
       `${zone.name} 쪽으로 오늘의 여행 운이 기울었어요`,
       `이번 샷은 ${zone.name} 라인에 안착했어요`,
@@ -166,7 +166,7 @@ function showResult(zone) {
   if (!zone) return
   $('#card-emoji').textContent = zone.emoji
   $('#card-region').textContent = zone.name
-  $('#card-sub').textContent = resultSubtitle(zone)
+  $('#card-sub').textContent = resultSubtitle(app.mode, zone)
   $('#card-desc').textContent = zone.desc || '이번 여행, 여기로 정해졌습니다!'
   // '더 자세히'는 8도 모드 결과에서만
   $('#btn-detail').style.display = app.mode === 'province' ? '' : 'none'

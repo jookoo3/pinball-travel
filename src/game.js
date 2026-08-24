@@ -702,13 +702,12 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
     ctx.shadowBlur = 12
     ctx.lineJoin = 'round'
     ctx.lineCap = 'round'
-    traceRoundedPath(pts)
+    beginRoundedPath(pts)
     ctx.stroke()
     ctx.lineWidth = 1.25
     ctx.shadowBlur = 0
     ctx.strokeStyle = 'rgba(240,250,255,0.55)'
-    ctx.beginPath()
-    traceRoundedPath(pts)
+    beginRoundedPath(pts)
     ctx.stroke()
     ctx.restore()
   }
@@ -876,9 +875,8 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
     }
   }
 
-  function traceRoundedPath(pts) {
-    ctx.beginPath()
-    ctx.moveTo(pts[0][0], pts[0][1])
+  function appendRoundedPath(pts) {
+    ctx.lineTo(pts[0][0], pts[0][1])
     for (let i = 1; i < pts.length - 1; i++) {
       const curr = pts[i]
       const next = pts[i + 1]
@@ -890,6 +888,12 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
     ctx.lineTo(last[0], last[1])
   }
 
+  function beginRoundedPath(pts) {
+    ctx.beginPath()
+    ctx.moveTo(pts[0][0], pts[0][1])
+    appendRoundedPath(pts)
+  }
+
   function drawLaunchChannel() {
     ctx.save()
     const fill = ctx.createLinearGradient(LANE_L, CANVAS_H, gap[0], chTop)
@@ -897,12 +901,8 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
     fill.addColorStop(0.45, 'rgba(38,68,145,0.48)')
     fill.addColorStop(1, 'rgba(120,225,255,0.16)')
     ctx.fillStyle = fill
-    ctx.beginPath()
-    traceRoundedPath(outerPath)
-    for (let i = innerPath.length - 1; i >= 0; i--) {
-      const p = innerPath[i]
-      i === innerPath.length - 1 ? ctx.lineTo(p[0], p[1]) : ctx.lineTo(p[0], p[1])
-    }
+    beginRoundedPath(outerPath)
+    appendRoundedPath([...innerPath].reverse())
     ctx.closePath()
     ctx.fill()
 
@@ -920,7 +920,7 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
     ctx.beginPath()
-    ctx.moveTo(LANE_CX - 8, 118)
+    ctx.moveTo(LANE_CX - 8, railP0[1] + 22)
     for (let i = 1; i <= 30; i++) {
       const p = railPoint(i / 30)
       ctx.lineTo(p[0], p[1])
