@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="한반도 핀볼 여행 — 핀볼을 튕겨 다음 여행지를 정하세요" />
+    <title>Pinball Travel · 한반도 핀볼 여행</title>
+  </head>
+  <body>
+    <div id="app">
+      <!-- ═══════════ HOME ═══════════ -->
+      <section id="screen-home" class="screen active">
+        <div class="stars"></div>
+        <div class="home-inner">
+          <div class="logo-wrap">
+            <div class="logo-ball"></div>
+            <h1 class="logo">PINBALL<span>TRAVEL</span></h1>
+            <p class="tagline">핀볼을 튕겨서 정하는 대한민국 여행지 🇰🇷</p>
+          </div>
+
+          <div class="mode-cards">
+            <button class="mode-card" data-mode="province">
+              <div class="mode-emoji">🗺️</div>
+              <div class="mode-name">팔도 유람</div>
+              <div class="mode-desc">8도 지도에서 핀볼 굴리기<br/>당첨된 도(道)는 더 자세히 파고들 수 있어요</div>
+            </button>
+            <button class="mode-card" data-mode="city">
+              <div class="mode-emoji">📍</div>
+              <div class="mode-name">전국 일주</div>
+              <div class="mode-desc">전국을 시·군 단위로 쪼갠 정밀 지도에서<br/>한 번에 세부 여행지 결정</div>
+            </button>
+            <button class="mode-card locked" data-mode="secret">
+              <div class="mode-emoji">🔒</div>
+              <div class="mode-name">???</div>
+              <div class="mode-desc">Coming Soon</div>
+            </button>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ═══════════ GAME ═══════════ -->
+      <section id="screen-game" class="screen">
+        <div class="game-topbar">
+          <button id="btn-back" class="ghost-btn">← 나가기</button>
+          <div class="game-title" id="game-title">팔도 유람</div>
+          <div class="timer-wrap">
+            <div class="timer-num" id="timer-num">--</div>
+            <div class="timer-bar"><div class="timer-fill" id="timer-fill"></div></div>
+          </div>
+        </div>
+        <div class="time-select" id="time-select">
+          <span class="time-label">⏱ 시간</span>
+          <div class="time-btns">
+            <button class="time-btn" data-time="10">10초</button>
+            <button class="time-btn active" data-time="20">20초</button>
+            <button class="time-btn" data-time="30">30초</button>
+            <button class="time-btn" data-time="custom">✏️ 직접입력</button>
+            <button class="time-btn" data-time="random">🎲 랜덤</button>
+          </div>
+          <div id="custom-time-wrap" class="custom-time hidden">
+            <input id="custom-time" type="number" min="1" max="120" value="15" inputmode="numeric" />
+            <span>초</span>
+          </div>
+          <div id="random-time-hint" class="random-hint hidden">발사 시 1~60초 무작위!</div>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="game-canvas"></canvas>
+          <div id="hint" class="hint">🎯 오른쪽 플런저를 <b>아래로 당겼다 놓아</b> 발사하세요</div>
+        </div>
+      </section>
+
+      <!-- ═══════════ RESULT CARD ═══════════ -->
+      <div id="result-overlay" class="overlay">
+        <div class="result-card" id="result-card">
+          <div class="card-stamp">TRAVEL PICK</div>
+          <div class="card-emoji" id="card-emoji">🏝️</div>
+          <div class="card-region" id="card-region">제주도</div>
+          <div class="card-sub" id="card-sub"></div>
+          <div class="card-desc" id="card-desc"></div>
+          <div class="card-actions">
+            <button id="btn-detail" class="cta primary">🔎 더 자세히 정하기</button>
+            <button id="btn-share" class="cta share">📤 결과 공유하기</button>
+            <button id="btn-retry" class="cta">🔄 다시 하기</button>
+            <button id="btn-home" class="cta ghost">🏠 처음으로</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="loading" class="loading hidden"><div class="spinner"></div><p>한반도 해안선 그리는 중…</p></div>
+      <div id="toast" class="toast"></div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
