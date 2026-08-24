@@ -12,6 +12,7 @@ const LANE_CX = (LANE_L + LANE_R) / 2
 const BALL_R = 9
 const GAP_HALF = 26            // 북쪽 관문 반폭
 const WALL_T = 12
+const PLUNGER_TRAVEL = 108
 
 function decimate(ring, minDist = 5) {
   const out = [ring[0]]
@@ -317,7 +318,7 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
   function onDown(e) {
     if (state.phase !== 'ready') return
     const [x, y] = canvasPos(e)
-    if (x > LANE_L - 20 && y > CANVAS_H - 320) {
+    if (x > LANE_L - 30 && y > CANVAS_H - 340) {
       state.dragging = true
       state.dragStartY = y
       e.preventDefault()
@@ -326,7 +327,7 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
   function onMove(e) {
     if (!state.dragging) return
     const [, y] = canvasPos(e)
-    state.plungerPull = Math.max(0, Math.min(1, (y - state.dragStartY) / 150))
+    state.plungerPull = Math.max(0, Math.min(1, (y - state.dragStartY) / PLUNGER_TRAVEL))
     e.preventDefault()
   }
   function onUp() {
@@ -389,7 +390,7 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
 
     // 준비 상태: 공을 플런저 헤드 위에 고정
     if (state.phase === 'ready') {
-      Body.setPosition(ball, { x: LANE_CX, y: plungerRestY + state.plungerPull * 70 - BALL_R - 8 })
+      Body.setPosition(ball, { x: LANE_CX, y: plungerRestY + state.plungerPull * PLUNGER_TRAVEL - BALL_R - 8 })
       Body.setVelocity(ball, { x: 0, y: 0 })
     }
 
@@ -589,9 +590,8 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
       ctx.restore()
     }
 
-    // 항로(채널) 네온 가이드
-    drawPath(outerPath, 'rgba(120,220,255,0.55)')
-    drawPath(innerPath, 'rgba(120,220,255,0.55)')
+    // 항로(채널) 메탈/네온 렌더
+    drawLaunchChannel()
 
     // 가이드 레일 (점선 곡선)
     ctx.save()
@@ -697,13 +697,18 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
   function drawPath(pts, color) {
     ctx.save()
     ctx.strokeStyle = color
-    ctx.lineWidth = 3
+    ctx.lineWidth = 3.5
     ctx.shadowColor = color
-    ctx.shadowBlur = 8
+    ctx.shadowBlur = 12
     ctx.lineJoin = 'round'
+    ctx.lineCap = 'round'
+    traceRoundedPath(pts)
+    ctx.stroke()
+    ctx.lineWidth = 1.25
+    ctx.shadowBlur = 0
+    ctx.strokeStyle = 'rgba(240,250,255,0.55)'
     ctx.beginPath()
-    ctx.moveTo(pts[0][0], pts[0][1])
-    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1])
+    traceRoundedPath(pts)
     ctx.stroke()
     ctx.restore()
   }
@@ -723,7 +728,7 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
   }
 
   function drawPlunger() {
-    const pull = state.plungerPull * 70
+    const pull = state.plungerPull * PLUNGER_TRAVEL
     const py = plungerRestY + pull
     const laneW = LANE_R - LANE_L
 
@@ -869,6 +874,59 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
       ctx.fillText('▼ PULL', LANE_CX, plungerRestY - 40)
       ctx.restore()
     }
+  }
+
+  function traceRoundedPath(pts) {
+    ctx.beginPath()
+    ctx.moveTo(pts[0][0], pts[0][1])
+    for (let i = 1; i < pts.length - 1; i++) {
+      const curr = pts[i]
+      const next = pts[i + 1]
+      const mx = (curr[0] + next[0]) / 2
+      const my = (curr[1] + next[1]) / 2
+      ctx.quadraticCurveTo(curr[0], curr[1], mx, my)
+    }
+    const last = pts[pts.length - 1]
+    ctx.lineTo(last[0], last[1])
+  }
+
+  function drawLaunchChannel() {
+    ctx.save()
+    const fill = ctx.createLinearGradient(LANE_L, CANVAS_H, gap[0], chTop)
+    fill.addColorStop(0, 'rgba(20,32,88,0.82)')
+    fill.addColorStop(0.45, 'rgba(38,68,145,0.48)')
+    fill.addColorStop(1, 'rgba(120,225,255,0.16)')
+    ctx.fillStyle = fill
+    ctx.beginPath()
+    traceRoundedPath(outerPath)
+    for (let i = innerPath.length - 1; i >= 0; i--) {
+      const p = innerPath[i]
+      i === innerPath.length - 1 ? ctx.lineTo(p[0], p[1]) : ctx.lineTo(p[0], p[1])
+    }
+    ctx.closePath()
+    ctx.fill()
+
+    ctx.globalAlpha = 0.75
+    drawPath(outerPath, 'rgba(120,220,255,0.72)')
+    drawPath(innerPath, 'rgba(120,220,255,0.72)')
+    ctx.globalAlpha = 1
+
+    const beam = ctx.createLinearGradient(LANE_CX, CANVAS_H, gap[0], gapY)
+    beam.addColorStop(0, 'rgba(255,255,255,0)')
+    beam.addColorStop(0.5, 'rgba(195,240,255,0.16)')
+    beam.addColorStop(1, 'rgba(255,255,255,0)')
+    ctx.strokeStyle = beam
+    ctx.lineWidth = 9
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+    ctx.beginPath()
+    ctx.moveTo(LANE_CX - 8, 118)
+    for (let i = 1; i <= 30; i++) {
+      const p = railPoint(i / 30)
+      ctx.lineTo(p[0], p[1])
+    }
+    ctx.stroke()
+    ctx.restore()
   }
 
   // ── 좌상단 속도 HUD ──
