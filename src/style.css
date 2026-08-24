@@ -23,7 +23,7 @@ body {
   -webkit-user-select: none;
 }
 
-#app { width: 100vw; height: 100vh; }
+#app { width: 100vw; height: 100vh; height: 100dvh; }
 
 .screen { display: none; width: 100%; height: 100%; }
 .screen.active { display: flex; flex-direction: column; }
@@ -57,6 +57,7 @@ body {
 .home-inner {
   position: relative; z-index: 1;
   display: flex; flex-direction: column; align-items: center; gap: 42px;
+  width: min(1100px, 100%);
   padding: 24px;
 }
 
@@ -90,6 +91,9 @@ body {
 .logo span { display: block; font-size: 0.62em; letter-spacing: 0.5em; margin-left: 0.25em; }
 
 .tagline { margin-top: 14px; color: var(--sub); font-size: 17px; font-weight: 500; }
+.tagline, .mode-desc, .game-title, .card-region, .card-sub, .card-desc, .cta, .hint {
+  word-break: keep-all;
+}
 
 .mode-cards { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; }
 
@@ -171,7 +175,12 @@ body {
   display: flex; align-items: center; justify-content: space-between;
   padding: 14px 22px; gap: 18px;
 }
-.game-title { font-weight: 800; font-size: 18px; letter-spacing: 0.02em; }
+.game-title {
+  flex: 1;
+  min-width: 0;
+  font-weight: 800; font-size: 18px; letter-spacing: 0.02em;
+  text-align: center;
+}
 
 .ghost-btn {
   background: transparent; border: 1px solid rgba(140, 165, 255, 0.3);
@@ -200,10 +209,13 @@ body {
 
 .canvas-wrap {
   flex: 1; display: flex; align-items: center; justify-content: center;
-  position: relative; min-height: 0; padding: 0 12px 12px;
+  position: relative; min-height: 0; padding: 0 16px 16px;
 }
 #game-canvas {
-  height: 100%; max-width: 100%;
+  width: auto;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
   aspect-ratio: 780 / 940;
   object-fit: contain;
   border-radius: 18px;
@@ -214,15 +226,16 @@ body {
 }
 
 .hint {
-  position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
-  padding: 12px 24px; border-radius: 999px;
+  position: absolute; left: 32px; bottom: 28px;
+  max-width: min(340px, calc(100% - 140px));
+  padding: 12px 18px; border-radius: 20px;
   background: rgba(10, 16, 48, 0.85);
   border: 1px solid rgba(255, 212, 59, 0.4);
   color: #ffe9a8; font-size: 15px;
   backdrop-filter: blur(8px);
   animation: hintpulse 2s ease-in-out infinite;
   pointer-events: none;
-  white-space: nowrap;
+  line-height: 1.5;
 }
 .hint.hidden { display: none; }
 @keyframes hintpulse { 0%, 100% { opacity: 0.85; } 50% { opacity: 1; } }
@@ -266,11 +279,15 @@ body {
 .card-emoji { font-size: 72px; filter: drop-shadow(0 6px 20px rgba(0,0,0,0.4)); }
 .card-region {
   margin-top: 10px;
-  font-size: 40px; font-weight: 900; letter-spacing: -0.01em;
+  font-size: clamp(30px, 5vw, 40px); font-weight: 900; letter-spacing: -0.01em;
+  line-height: 1.12;
   background: linear-gradient(100deg, #fff, #b9c8ff);
   -webkit-background-clip: text; background-clip: text; color: transparent;
 }
-.card-sub { margin-top: 4px; color: var(--sub); font-weight: 700; font-size: 15px; }
+.card-sub {
+  margin-top: 10px; color: var(--sub); font-weight: 700; font-size: 15px;
+  line-height: 1.5;
+}
 .card-sub:empty { display: none; }
 .card-desc { margin-top: 16px; color: #c6d0f5; font-size: 15px; line-height: 1.7; }
 
@@ -332,3 +349,112 @@ body {
   animation: spin 0.8s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 900px) {
+  .mode-card {
+    width: min(100%, 320px);
+  }
+
+  .game-topbar {
+    flex-wrap: wrap;
+    justify-content: center;
+    padding: 14px 16px 10px;
+  }
+
+  .ghost-btn {
+    order: 1;
+  }
+
+  .game-title {
+    order: 2;
+    width: 100%;
+    font-size: 17px;
+  }
+
+  .timer-wrap {
+    order: 3;
+    width: min(100%, 320px);
+    min-width: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  body {
+    overflow: hidden;
+  }
+
+  .home-inner {
+    gap: 28px;
+    padding: 24px 16px 32px;
+  }
+
+  .tagline {
+    font-size: 15px;
+    line-height: 1.55;
+  }
+
+  .mode-cards {
+    width: 100%;
+    gap: 14px;
+  }
+
+  .mode-card {
+    width: 100%;
+    padding: 24px 18px;
+  }
+
+  .mode-name {
+    font-size: 20px;
+  }
+
+  .mode-desc {
+    font-size: 14px;
+  }
+
+  .time-select {
+    padding: 6px 14px 10px;
+  }
+
+  .time-btn {
+    padding: 9px 16px;
+    font-size: 13px;
+  }
+
+  .canvas-wrap {
+    padding: 0 10px 12px;
+  }
+
+  .hint {
+    left: 12px;
+    right: 108px;
+    bottom: 18px;
+    max-width: none;
+    font-size: 13px;
+    padding: 10px 14px;
+  }
+
+  .result-card {
+    width: min(420px, calc(100vw - 24px));
+    padding: 44px 20px 22px;
+    border-radius: 24px;
+  }
+
+  .card-emoji {
+    font-size: 60px;
+  }
+
+  .card-sub, .card-desc {
+    font-size: 14px;
+  }
+
+  .cta {
+    font-size: 15px;
+    padding: 13px 12px;
+  }
+
+  .toast {
+    width: calc(100vw - 24px);
+    text-align: center;
+    white-space: normal;
+  }
+}

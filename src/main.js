@@ -15,6 +15,47 @@ const app = {
   lastResult: null,    // 결과 zone
 }
 
+function pickByKey(key, items) {
+  let hash = 0
+  for (const ch of key) hash = (hash * 33 + ch.charCodeAt(0)) >>> 0
+  return items[hash % items.length]
+}
+
+function gameTitle(mode, region) {
+  if (mode === 'province') return '🗺️ 팔도 핀볼 라운드'
+  if (mode === 'city-all') return '📍 전국 디테일 라운드'
+  return pickByKey(region.key, [
+    `${region.emoji} ${region.name}, 어디까지 들어가 볼까요?`,
+    `${region.emoji} ${region.name} 안쪽으로 한 번 더`,
+    `${region.emoji} 이번엔 ${region.name}의 어느 동네로 갈까요?`,
+  ])
+}
+
+function resultSubtitle(mode, zone) {
+  if (mode === 'province') {
+    return pickByKey(zone.key, [
+      `${zone.name} 쪽으로 오늘의 여행 운이 기울었어요`,
+      `이번 샷은 ${zone.name} 라인에 안착했어요`,
+      `${zone.name} 기류가 이번 라운드를 가져갔어요`,
+    ])
+  }
+
+  const place = zone.parent ? `${zone.parent} · ${zone.name}` : zone.name
+  return pickByKey(zone.key, [
+    `${place} 쪽으로 핀볼이 정확히 꽂혔어요`,
+    `이번 착지점은 ${place}예요`,
+    `${place}, 지금 가장 끌리는 목적지예요`,
+  ])
+}
+
+function detailButtonLabel(zone) {
+  return pickByKey(zone.key, [
+    `🔎 ${zone.name} 안으로 더 들어가기`,
+    `🔎 ${zone.name} 코스로 더 좁혀보기`,
+    `🔎 ${zone.name} 안에서 다시 튕기기`,
+  ])
+}
+
 function resolveDuration() {
   if (app.timeMode === 'random') return 1 + Math.floor(Math.random() * 60)
   if (app.timeMode === 'custom') {
@@ -82,10 +123,7 @@ async function startGame({ mode, regionKey = null }) {
 
     app.mode = mode
     const region = regionKey ? REGIONS.find(r => r.key === regionKey) : null
-    $('#game-title').textContent =
-      mode === 'province' ? '🗺️ 간략한 지도'
-      : mode === 'city-all' ? '📍 자세한 지도'
-      : `🔎 ${region.name} 자세히 보기`
+    $('#game-title').textContent = gameTitle(mode, region)
 
     $('#timer-num').textContent = timerLabel()
     $('#timer-fill').style.width = '100%'
@@ -128,10 +166,11 @@ function showResult(zone) {
   if (!zone) return
   $('#card-emoji').textContent = zone.emoji
   $('#card-region').textContent = zone.name
-  $('#card-sub').textContent = zone.parent ? `${zone.parent}` : ''
+  $('#card-sub').textContent = resultSubtitle(app.mode, zone)
   $('#card-desc').textContent = zone.desc || '이번 여행, 여기로 정해졌습니다!'
   // '더 자세히'는 8도 모드 결과에서만
   $('#btn-detail').style.display = app.mode === 'province' ? '' : 'none'
+  $('#btn-detail').textContent = detailButtonLabel(zone)
   overlay.classList.add('visible')
 }
 
