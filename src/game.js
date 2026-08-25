@@ -443,13 +443,18 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
 
     if (state.phase === 'play') {
       state.timeLeft -= dt / 1000
-      // 최소 순항 속도 유지: 무중력에서 공이 죽지 않고 계속 떠돌게
-      if (sp < 4.2 && sp > 0.01) {
-        const boost = 4.2 / sp
+      // 최소 순항 속도 유지: 무중력에서 공이 완전히 멈추진 않게 하되,
+      // 매번 같은 목표 속도(4.2)로 스냅되면 "고정된 느낌"이 나므로
+      // 임계값을 낮추고 목표 속도를 매번 다르게 흔들어 자연스럽게 만듦
+      const MIN_CRUISE = 2.4
+      if (sp < MIN_CRUISE && sp > 0.01) {
+        const target = MIN_CRUISE + Math.random() * 2.6 // 2.4~5.0 사이 무작위
+        const boost = target / sp
         Body.setVelocity(ball, { x: ball.velocity.x * boost, y: ball.velocity.y * boost })
       } else if (sp <= 0.01) {
         const a = Math.random() * Math.PI * 2
-        Body.setVelocity(ball, { x: Math.cos(a) * 4.2, y: Math.sin(a) * 4.2 })
+        const target = MIN_CRUISE + Math.random() * 2.6
+        Body.setVelocity(ball, { x: Math.cos(a) * target, y: Math.sin(a) * target })
       }
       // 끼임 감지 워치독: 좁은 해안 요철에 갇히면 내륙으로 탈출 임펄스
       if (sp < 1.1) {
