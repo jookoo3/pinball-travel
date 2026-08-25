@@ -10,9 +10,16 @@
   --pink: #ff5fb4;
   --gold: #ffd43b;
   --mint: #63e6be;
+  /* JS가 실제 뷰포트 높이를 넣어주는 폴백 변수 (구형 iOS Safari 대응) */
+  --vh: 1vh;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  overscroll-behavior: none; /* 당겨서 새로고침 / 바운스 스크롤 방지 */
+}
 
 body {
   font-family: 'Pretendard Variable', Pretendard, -apple-system, sans-serif;
@@ -21,9 +28,16 @@ body {
   overflow: hidden;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation; /* 더블탭 확대 및 300ms 탭 지연 방지 */
 }
 
-#app { width: 100vw; height: 100vh; }
+#app {
+  width: 100vw;
+  /* 100vh는 모바일 주소창 때문에 실제보다 커서 하단이 잘릴 수 있음 → dvh 우선 사용 */
+  height: calc(var(--vh, 1vh) * 100);
+  height: 100dvh;
+}
 
 .screen { display: none; width: 100%; height: 100%; }
 .screen.active { display: flex; flex-direction: column; }
@@ -37,6 +51,8 @@ body {
     linear-gradient(180deg, var(--bg0), var(--bg1));
   align-items: center;
   justify-content: center;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .stars {
@@ -58,6 +74,13 @@ body {
   position: relative; z-index: 1;
   display: flex; flex-direction: column; align-items: center; gap: 42px;
   padding: 24px;
+  padding-top: max(24px, env(safe-area-inset-top));
+  padding-bottom: max(24px, env(safe-area-inset-bottom));
+  padding-left: max(24px, env(safe-area-inset-left));
+  padding-right: max(24px, env(safe-area-inset-right));
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
 }
 
 .logo-wrap { text-align: center; position: relative; }
@@ -77,7 +100,7 @@ body {
 }
 
 .logo {
-  font-size: clamp(40px, 7vw, 72px);
+  font-size: clamp(34px, 9vw, 72px);
   font-weight: 900;
   letter-spacing: 0.06em;
   line-height: 0.95;
@@ -89,12 +112,18 @@ body {
 }
 .logo span { display: block; font-size: 0.62em; letter-spacing: 0.5em; margin-left: 0.25em; }
 
-.tagline { margin-top: 14px; color: var(--sub); font-size: 17px; font-weight: 500; }
+.tagline { margin-top: 14px; color: var(--sub); font-size: clamp(14px, 3.6vw, 17px); font-weight: 500; }
 
-.mode-cards { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; }
+.mode-cards {
+  display: flex; gap: 20px; flex-wrap: wrap; justify-content: center;
+  width: 100%;
+}
 
 .mode-card {
-  width: 240px; padding: 28px 22px;
+  width: 240px;
+  max-width: 100%;
+  flex: 1 1 240px;
+  padding: 28px 22px;
   border-radius: 22px;
   border: 1px solid rgba(140, 165, 255, 0.25);
   background: linear-gradient(160deg, rgba(120, 140, 255, 0.12), rgba(30, 40, 90, 0.25));
@@ -103,6 +132,7 @@ body {
   cursor: pointer;
   text-align: center;
   transition: transform 0.22s, box-shadow 0.22s, border-color 0.22s;
+  touch-action: manipulation;
 }
 .mode-card:hover {
   transform: translateY(-6px);
@@ -125,6 +155,7 @@ body {
   flex-wrap: wrap;
   padding: 8px 12px;
   transition: opacity 0.3s;
+  flex-shrink: 0;
 }
 .time-select.locked { opacity: 0.35; pointer-events: none; }
 .time-label { color: var(--sub); font-weight: 600; font-size: 14px; }
@@ -135,6 +166,7 @@ body {
   background: transparent; color: var(--sub);
   font-weight: 700; font-size: 14px; cursor: pointer;
   transition: all 0.18s;
+  touch-action: manipulation;
 }
 .time-btn.active {
   background: var(--neon); border-color: var(--neon); color: #fff;
@@ -169,26 +201,44 @@ body {
 
 .game-topbar {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 14px 22px; gap: 18px;
+  flex-wrap: wrap;
+  padding: 14px 22px;
+  padding-top: max(14px, env(safe-area-inset-top));
+  padding-left: max(22px, env(safe-area-inset-left));
+  padding-right: max(22px, env(safe-area-inset-right));
+  gap: 12px;
+  row-gap: 8px;
+  flex-shrink: 0;
 }
-.game-title { font-weight: 800; font-size: 18px; letter-spacing: 0.02em; }
+.game-title {
+  font-weight: 800; font-size: 18px; letter-spacing: 0.02em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  flex: 1 1 auto; text-align: center; min-width: 60px;
+}
 
 .ghost-btn {
   background: transparent; border: 1px solid rgba(140, 165, 255, 0.3);
   color: var(--sub); padding: 8px 16px; border-radius: 10px;
   font-weight: 600; cursor: pointer; font-size: 14px;
+  flex-shrink: 0;
+  touch-action: manipulation;
 }
 .ghost-btn:hover { color: var(--ink); border-color: rgba(160, 185, 255, 0.7); }
 
-.timer-wrap { display: flex; align-items: center; gap: 12px; min-width: 200px; }
+.timer-wrap {
+  display: flex; align-items: center; gap: 10px;
+  flex: 1 1 140px; min-width: 0; max-width: 220px;
+}
 .timer-num {
-  font-size: 26px; font-weight: 900; min-width: 44px; text-align: right;
+  font-size: 24px; font-weight: 900; min-width: 40px; text-align: right;
   font-variant-numeric: tabular-nums;
   color: var(--gold); text-shadow: 0 0 14px #ffd43b66;
+  flex-shrink: 0;
 }
 .timer-bar {
   flex: 1; height: 8px; border-radius: 99px;
   background: rgba(255, 255, 255, 0.1); overflow: hidden;
+  min-width: 40px;
 }
 .timer-fill {
   height: 100%; width: 100%;
@@ -200,21 +250,27 @@ body {
 
 .canvas-wrap {
   flex: 1; display: flex; align-items: center; justify-content: center;
-  position: relative; min-height: 0; padding: 0 12px 12px;
+  position: relative; min-height: 0; min-width: 0;
+  padding: 0 12px;
+  padding-bottom: max(32px, calc(env(safe-area-inset-bottom) + 20px));
+  padding-left: max(12px, env(safe-area-inset-left));
+  padding-right: max(12px, env(safe-area-inset-right));
 }
 #game-canvas {
-  height: 100%; max-width: 100%;
+  height: 100%; width: auto;
+  max-width: 100%; max-height: 100%;
   aspect-ratio: 780 / 940;
   object-fit: contain;
   border-radius: 18px;
   border: 1px solid rgba(140, 165, 255, 0.22);
   box-shadow: 0 0 60px rgba(90, 120, 255, 0.15), inset 0 0 80px rgba(20, 30, 80, 0.4);
-  touch-action: none;
+  touch-action: none; /* 캔버스 위에서는 스크롤/줌 대신 게임 제스처만 */
   cursor: grab;
 }
 
 .hint {
   position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+  bottom: max(30px, calc(env(safe-area-inset-bottom) + 14px));
   padding: 12px 24px; border-radius: 999px;
   background: rgba(10, 16, 48, 0.85);
   border: 1px solid rgba(255, 212, 59, 0.4);
@@ -223,6 +279,7 @@ body {
   animation: hintpulse 2s ease-in-out infinite;
   pointer-events: none;
   white-space: nowrap;
+  max-width: 92vw;
 }
 .hint.hidden { display: none; }
 @keyframes hintpulse { 0%, 100% { opacity: 0.85; } 50% { opacity: 1; } }
@@ -235,12 +292,17 @@ body {
   backdrop-filter: blur(6px);
   opacity: 0; pointer-events: none;
   transition: opacity 0.3s;
+  padding: 20px;
+  padding-top: max(20px, env(safe-area-inset-top));
+  padding-bottom: max(20px, env(safe-area-inset-bottom));
 }
 .overlay.visible { opacity: 1; pointer-events: auto; }
 
 .result-card {
   position: relative;
-  width: min(420px, 90vw);
+  width: min(420px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
   padding: 48px 36px 36px;
   border-radius: 28px;
   text-align: center;
@@ -263,10 +325,10 @@ body {
   opacity: 0.9;
 }
 
-.card-emoji { font-size: 72px; filter: drop-shadow(0 6px 20px rgba(0,0,0,0.4)); }
+.card-emoji { font-size: clamp(52px, 14vw, 72px); filter: drop-shadow(0 6px 20px rgba(0,0,0,0.4)); }
 .card-region {
   margin-top: 10px;
-  font-size: 40px; font-weight: 900; letter-spacing: -0.01em;
+  font-size: clamp(30px, 8vw, 40px); font-weight: 900; letter-spacing: -0.01em;
   background: linear-gradient(100deg, #fff, #b9c8ff);
   -webkit-background-clip: text; background-clip: text; color: transparent;
 }
@@ -283,6 +345,7 @@ body {
   background: rgba(140, 165, 255, 0.14);
   border: 1px solid rgba(140, 165, 255, 0.25);
   transition: all 0.18s;
+  touch-action: manipulation;
 }
 .cta:hover { background: rgba(140, 165, 255, 0.26); }
 .cta.primary {
@@ -303,6 +366,7 @@ body {
 /* ══════ TOAST ══════ */
 .toast {
   position: fixed; bottom: 36px; left: 50%;
+  bottom: max(36px, calc(env(safe-area-inset-bottom) + 20px));
   transform: translateX(-50%) translateY(20px);
   z-index: 200;
   padding: 13px 26px; border-radius: 999px;
@@ -312,6 +376,8 @@ body {
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), 0 0 24px rgba(99, 230, 190, 0.2);
   opacity: 0; pointer-events: none;
   transition: opacity 0.25s, transform 0.25s;
+  max-width: 90vw;
+  text-align: center;
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
@@ -332,3 +398,64 @@ body {
   animation: spin 0.8s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ══════════════════════════════════════════════════════
+   반응형 — 좁은 화면 (모바일 세로)
+   ══════════════════════════════════════════════════════ */
+@media (max-width: 480px) {
+  .home-inner { gap: 30px; }
+  .mode-cards { gap: 14px; }
+  .mode-card { padding: 22px 18px; }
+  .mode-emoji { font-size: 36px; margin-bottom: 8px; }
+  .mode-name { font-size: 18px; margin-bottom: 6px; }
+
+  .game-topbar { padding: 10px 14px; }
+  .game-title { font-size: 14px; order: 3; flex-basis: 100%; text-align: center; }
+  .ghost-btn { padding: 7px 12px; font-size: 13px; }
+  .timer-wrap { max-width: none; }
+  .timer-num { font-size: 20px; min-width: 32px; }
+
+  .time-select { padding: 6px 8px; gap: 6px; }
+  .time-label { font-size: 12px; }
+  .time-btn { padding: 7px 14px; font-size: 12.5px; }
+
+  .hint { font-size: 13px; padding: 10px 18px; white-space: normal; text-align: center; }
+
+  .result-card { padding: 36px 22px 26px; border-radius: 22px; }
+  .card-desc { font-size: 14px; }
+  .cta { padding: 13px; font-size: 15px; }
+}
+
+@media (max-width: 360px) {
+  .mode-card { width: 100%; }
+  .logo { font-size: clamp(30px, 10.5vw, 44px); }
+}
+
+/* ══════════════════════════════════════════════════════
+   반응형 — 가로모드 / 짧은 세로 높이 (폰 가로, 태블릿)
+   ══════════════════════════════════════════════════════ */
+@media (orientation: landscape) and (max-height: 560px) {
+  .home-inner { gap: 18px; padding: 16px; }
+  .logo-ball { width: 36px; height: 36px; margin-bottom: 8px; }
+  .logo { font-size: clamp(24px, 5.5vw, 40px); }
+  .tagline { margin-top: 8px; font-size: 13px; }
+  .mode-cards { gap: 12px; }
+  .mode-card { padding: 14px 16px; width: 200px; }
+  .mode-emoji { font-size: 26px; margin-bottom: 4px; }
+  .mode-name { font-size: 15px; margin-bottom: 4px; }
+  .mode-desc { font-size: 11px; line-height: 1.4; }
+
+  .game-topbar { padding: 8px 16px; }
+  .game-title { font-size: 14px; }
+  .time-select { padding: 4px 10px; }
+  .time-btn { padding: 5px 14px; font-size: 12px; }
+  .custom-time input { padding: 3px 6px; }
+  .canvas-wrap { padding-bottom: max(30px, env(safe-area-inset-bottom)); }
+
+  .hint { bottom: 10px; padding: 8px 16px; font-size: 12px; }
+}
+
+/* 태블릿: 카드/캔버스가 과도하게 커지지 않도록 폭 상한 */
+@media (min-width: 768px) {
+  .mode-card { width: 260px; }
+}

@@ -12,6 +12,10 @@ const LANE_CX = (LANE_L + LANE_R) / 2
 const BALL_R = 9
 const GAP_HALF = 26            // 북쪽 관문 반폭
 const WALL_T = 12
+const PLUNGER_MARGIN = 210     // 발사대(플런저) 하단 여유 공간 — 기존 120에서 확대해 당기고 쏘는 조작감을 개선
+const PLUNGER_TRAVEL = 115     // 플런저가 눌리는 최대 시각적 이동 거리 — 기존 70
+const PLUNGER_DRAG_DIST = 175  // 100% 파워가 되는 데 필요한 드래그 거리(px) — 기존 150
+const PLUNGER_ZONE = PLUNGER_MARGIN + 170 // 플런저 발사 제스처를 인식하는 터치 영역 높이 — 기존 320
 
 function decimate(ring, minDist = 5) {
   const out = [ring[0]]
@@ -91,8 +95,16 @@ function randomLandPoint(ring, margin = 26) {
 
 export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) {
   const ctx = canvas.getContext('2d')
-  canvas.width = CANVAS_W
-  canvas.height = CANVAS_H
+
+  // ── 모바일 레티나 대응 ───────────────────────────────────
+  // canvas.width/height는 논리 좌표(CANVAS_W/H)로 고정하되, 실제 픽셀
+  // 버퍼는 devicePixelRatio만큼 키우고 컨텍스트를 스케일해서 그린다.
+  // 물리 연산과 터치 좌표 변환(canvasPos)은 CSS 표시 크기 기준이라
+  // 영향을 받지 않고, 고해상도(레티나) 모바일 화면에서도 선명하게 보인다.
+  const dpr = Math.min(window.devicePixelRatio || 1, 2)
+  canvas.width = CANVAS_W * dpr
+  canvas.height = CANVAS_H * dpr
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
 
   const engine = Engine.create()
   engine.gravity.y = 0.42
@@ -237,7 +249,7 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
   }
 
   // ── 공 ────────────────────────────────────────────────────
-  const plungerRestY = CANVAS_H - 120
+  const plungerRestY = CANVAS_H - PLUNGER_MARGIN
   const ball = Bodies.circle(LANE_CX, plungerRestY - BALL_R - 6, BALL_R, {
     restitution: 0.92, friction: 0, frictionAir: 0.0045, density: 0.0016, label: 'ball',
   })
@@ -312,12 +324,14 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
     const r = canvas.getBoundingClientRect()
     const cx = (e.touches ? e.touches[0].clientX : e.clientX)
     const cy = (e.touches ? e.touches[0].clientY : e.clientY)
+    // r.width/height는 CSS 표시 크기이므로 devicePixelRatio와 무관하게
+    // 항상 논리 좌표(CANVAS_W/H) 기준으로 정확히 변환된다.
     return [(cx - r.left) * (CANVAS_W / r.width), (cy - r.top) * (CANVAS_H / r.height)]
   }
   function onDown(e) {
     if (state.phase !== 'ready') return
     const [x, y] = canvasPos(e)
-    if (x > LANE_L - 20 && y > CANVAS_H - 320) {
+    if (x > LANE_L - 20 && y > CANVAS_H - PLUNGER_ZONE) {
       state.dragging = true
       state.dragStartY = y
       e.preventDefault()
@@ -326,7 +340,7 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
   function onMove(e) {
     if (!state.dragging) return
     const [, y] = canvasPos(e)
-    state.plungerPull = Math.max(0, Math.min(1, (y - state.dragStartY) / 150))
+    state.plungerPull = Math.max(0, Math.min(1, (y - state.dragStartY) / PLUNGER_DRAG_DIST))
     e.preventDefault()
   }
   function onUp() {
@@ -348,6 +362,8 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
   canvas.addEventListener('touchstart', onDown, { passive: false })
   canvas.addEventListener('touchmove', onMove, { passive: false })
   window.addEventListener('touchend', onUp)
+  // 드래그 중 다른 손가락으로 화면을 만지거나(핀치줌) 취소되는 경우 대비
+  window.addEventListener('touchcancel', onUp)
 
   // ── 루프 ─────────────────────────────────────────────────
   let raf
@@ -370,10 +386,12 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
     }
 
     // 가이드 레일: 레인 꼭대기 도달 → 곡선 항로를 따라 관문까지 유도
+    // (가이드는 방향만 바꿀 뿐 속도는 조절하지 않음 — 진입 속도를 그대로 유지해
+    //  플런저를 당긴 세기가 최종 속도에 그대로 반영되도록 함)
     if (state.phase === 'launched' && !state.onRail && ball.position.y < 110 && ball.position.x > LANE_L - 10 && ball.velocity.y < 0) {
       state.onRail = true
       state.railT = 0
-      state.railSpeed = Math.max(7, Math.hypot(ball.velocity.x, ball.velocity.y) * 0.85)
+      state.railSpeed = Math.hypot(ball.velocity.x, ball.velocity.y)
     }
     if (state.onRail) {
       state.railT += (state.railSpeed * (dt / 16.6)) / railLen
@@ -383,13 +401,13 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
       Body.setVelocity(ball, { x: 0, y: 0 })
       if (t >= 1) {
         state.onRail = false
-        Body.setVelocity(ball, { x: (Math.random() - 0.5) * 3, y: Math.max(5, state.railSpeed * 0.55) })
+        Body.setVelocity(ball, { x: (Math.random() - 0.5) * 3, y: state.railSpeed })
       }
     }
 
     // 준비 상태: 공을 플런저 헤드 위에 고정
     if (state.phase === 'ready') {
-      Body.setPosition(ball, { x: LANE_CX, y: plungerRestY + state.plungerPull * 70 - BALL_R - 8 })
+      Body.setPosition(ball, { x: LANE_CX, y: plungerRestY + state.plungerPull * PLUNGER_TRAVEL - BALL_R - 8 })
       Body.setVelocity(ball, { x: 0, y: 0 })
     }
 
@@ -723,7 +741,7 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
   }
 
   function drawPlunger() {
-    const pull = state.plungerPull * 70
+    const pull = state.plungerPull * PLUNGER_TRAVEL
     const py = plungerRestY + pull
     const laneW = LANE_R - LANE_L
 
@@ -929,6 +947,7 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
       canvas.removeEventListener('touchstart', onDown)
       canvas.removeEventListener('touchmove', onMove)
       window.removeEventListener('touchend', onUp)
+      window.removeEventListener('touchcancel', onUp)
       Composite.clear(engine.world, false)
       Engine.clear(engine)
     },

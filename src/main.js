@@ -8,6 +8,20 @@ const screens = { home: $('#screen-home'), game: $('#screen-game') }
 const overlay = $('#result-overlay')
 const loading = $('#loading')
 
+// ── 모바일 뷰포트 높이 보정 ─────────────────────────────────
+// 모바일 브라우저의 100vh는 주소창/툴바를 포함해 계산되어 실제 보이는
+// 영역보다 커지는 경우가 많다(특히 구형 iOS Safari에서 dvh 미지원 시).
+// 실제 innerHeight를 --vh 변수로 저장해 CSS의 폴백으로 사용한다.
+function setViewportHeightVar() {
+  document.documentElement.style.setProperty('--vh', `${window.innerHeight * 0.01}px`)
+}
+setViewportHeightVar()
+window.addEventListener('resize', setViewportHeightVar)
+window.addEventListener('orientationchange', () => setTimeout(setViewportHeightVar, 100))
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', setViewportHeightVar)
+}
+
 const app = {
   timeMode: '20',      // '10' | '20' | '30' | 'custom' | 'random'
   mode: null,          // 'province' | 'city'
