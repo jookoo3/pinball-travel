@@ -218,7 +218,10 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
     const body = Bodies.rectangle(c[0], c[1], len, 9, {
       isStatic: true, label: 'spinner', restitution: 0.7, friction: 0,
     })
-    spinners.push({ x: c[0], y: c[1], len, angle: Math.random() * Math.PI, spin: 0, flash: 0, body })
+    spinners.push({
+      x: c[0], y: c[1], len, angle: Math.random() * Math.PI, spin: 0, flash: 0, body,
+      ghost: false, ghostUntil: 0, // 한 번 맞으면 잠시 반투명 통과 상태가 됨
+    })
     spinnerBodies.push(body)
   }
   makeSpinner(mainRing)
@@ -247,6 +250,10 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
     bumpers.push({ x: pt[0], y: pt[1], r, flash: 0, spawn: 1, body })
     bumperBodies.push(body)
   }
+
+  // 관문이 닫힐 때 생기는 벽 — draw()에서 그리기 위해 형상을 보관해둔다
+  // (보관하지 않으면 봉인 후 화면에 안 보이는 '투명 벽'이 되어 공이 이유 없이 튕겨 보인다)
+  let gateWall = null
 
   // ── 공 ────────────────────────────────────────────────────
   const plungerRestY = CANVAS_H - PLUNGER_MARGIN
@@ -300,7 +307,7 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
       const spinBody = pair.bodyA.label === 'spinner' ? pair.bodyA : pair.bodyB.label === 'spinner' ? pair.bodyB : null
       if (spinBody && state.phase !== 'done') {
         const s = spinners.find(x => x.body === spinBody)
-        if (!s) continue
+        if (!s || s.ghost) continue // 통과 상태인 스피너는 충돌 무시
         const sp = Math.hypot(ball.velocity.x, ball.velocity.y)
         // 공이 지나간 방향(외적 부호)으로 속도에 비례해 회전
         const cross = (ball.position.x - s.x) * ball.velocity.y - (ball.position.y - s.y) * ball.velocity.x
@@ -315,6 +322,10 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
           x: (dx / d) * 0.006 + (-dy / d) * tang * 0.005,
           y: (dy / d) * 0.006 + (dx / d) * tang * 0.005,
         })
+        // 한 번 맞으면 1~5초간 반투명 통과 상태로 전환
+        s.ghost = true
+        s.ghostUntil = state.t + 1 + Math.random() * 4
+        s.body.isSensor = true
       }
     }
   })
@@ -433,10 +444,13 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
       engine.gravity.y = 0 // Zero-G: 위아래 치우침 없이 5:5로 떠다님
       if (!state.gateClosed) {
         state.gateClosed = true
-        World.add(engine.world, Bodies.rectangle(gap[0], gapY + 2, GAP_HALF * 2 + 26, WALL_T,
-          { isStatic: true, restitution: 0.85, angle: Math.atan2(
-            mainRing[(gapIdx + 4) % mainRing.length][1] - mainRing[(gapIdx - 4 + mainRing.length) % mainRing.length][1],
-            mainRing[(gapIdx + 4) % mainRing.length][0] - mainRing[(gapIdx - 4 + mainRing.length) % mainRing.length][0]) }))
+        const gateAngle = Math.atan2(
+          mainRing[(gapIdx + 4) % mainRing.length][1] - mainRing[(gapIdx - 4 + mainRing.length) % mainRing.length][1],
+          mainRing[(gapIdx + 4) % mainRing.length][0] - mainRing[(gapIdx - 4 + mainRing.length) % mainRing.length][0])
+        const gateLen = GAP_HALF * 2 + 26
+        World.add(engine.world, Bodies.rectangle(gap[0], gapY + 2, gateLen, WALL_T,
+          { isStatic: true, restitution: 0.85, angle: gateAngle }))
+        gateWall = { x: gap[0], y: gapY + 2, len: gateLen, angle: gateAngle }
       }
       onEnter?.()
     }
@@ -516,12 +530,16 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
       b.spawn = Math.min(1, b.spawn + dt / 350)
     }
 
-    // 스피너 회전 갱신 (마찰 감쇠)
+    // 스피너 회전 갱신 (마찰 감쇠) + 통과 상태 해제
     for (const s of spinners) {
       s.angle += s.spin * (dt / 1000)
       s.spin *= Math.pow(0.55, dt / 1000)
       s.flash *= 0.92
       Body.setAngle(s.body, s.angle)
+      if (s.ghost && state.t >= s.ghostUntil) {
+        s.ghost = false
+        s.body.isSensor = false
+      }
     }
 
     draw()
@@ -610,6 +628,21 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
       ctx.lineWidth = 3
       ctx.beginPath(); ctx.moveTo(gapL, gapY); ctx.lineTo(gapR, gapY); ctx.stroke()
       ctx.restore()
+    } else if (gateWall) {
+      // 봉인된 관문 벽 — 실제 충돌체 위치와 각도에 맞춰 그려서 "투명 벽"처럼 보이지 않게 함
+      const hx = Math.cos(gateWall.angle) * (gateWall.len / 2)
+      const hy = Math.sin(gateWall.angle) * (gateWall.len / 2)
+      ctx.save()
+      ctx.shadowColor = '#5f7bff'
+      ctx.shadowBlur = 10
+      ctx.strokeStyle = 'rgba(140,165,255,0.9)'
+      ctx.lineWidth = WALL_T * 0.9
+      ctx.lineCap = 'round'
+      ctx.beginPath()
+      ctx.moveTo(gateWall.x - hx, gateWall.y - hy)
+      ctx.lineTo(gateWall.x + hx, gateWall.y + hy)
+      ctx.stroke()
+      ctx.restore()
     }
 
     // 항로(채널) 네온 가이드
@@ -644,6 +677,7 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
     for (const s of spinners) {
       const speed = Math.abs(s.spin)
       ctx.save()
+      ctx.globalAlpha = s.ghost ? 0.35 : 1 // 통과 상태면 반투명으로 표시
       ctx.translate(s.x, s.y)
       ctx.rotate(s.angle)
       ctx.shadowColor = '#63e6be'
@@ -666,6 +700,7 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
       ctx.restore()
       // 중심 허브
       ctx.save()
+      ctx.globalAlpha = s.ghost ? 0.35 : 1
       ctx.fillStyle = '#0d1233'
       ctx.strokeStyle = '#9ef5d9'
       ctx.lineWidth = 2
