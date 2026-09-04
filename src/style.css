@@ -131,6 +131,31 @@ body {
   box-shadow: 0 18px 44px rgba(90, 120, 255, 0.28);
 }
 .mode-card:hover .mode-emoji { transform: scale(1.1) translateY(-2px); }
+
+.home-info {
+  width: min(820px, 100%);
+  padding: 22px 24px;
+  border-top: 1px solid rgba(140, 165, 255, 0.18);
+  border-bottom: 1px solid rgba(140, 165, 255, 0.18);
+  text-align: center;
+}
+.home-info h2 { font-size: 20px; margin-bottom: 8px; }
+.home-info > p {
+  max-width: 680px; margin: 0 auto;
+  color: var(--sub); font-size: 14px; line-height: 1.7;
+}
+.home-info-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+  margin-top: 18px; text-align: left;
+}
+.home-info-grid article {
+  display: flex; flex-direction: column; gap: 5px;
+  padding: 14px; border-radius: 12px;
+  background: rgba(120, 140, 255, 0.08);
+  border: 1px solid rgba(140, 165, 255, 0.12);
+}
+.home-info-grid strong { color: #cdd8ff; font-size: 13px; }
+.home-info-grid span { color: var(--sub); font-size: 12px; line-height: 1.5; }
 .mode-card.locked { opacity: 0.45; cursor: not-allowed; }
 .mode-card.shake { animation: shake 0.4s; }
 @keyframes shake {
@@ -339,6 +364,11 @@ body {
   .mode-card { padding: 22px 18px; }
   .mode-emoji { font-size: 36px; }
   .mode-name { font-size: 19px; }
+  .home-info { padding: 18px 4px; }
+  .home-info h2 { font-size: 18px; }
+  .home-info > p { font-size: 13px; }
+  .home-info-grid { grid-template-columns: 1fr; gap: 8px; }
+  .home-info-grid article { padding: 11px 14px; }
 
   .game-topbar { padding: 10px 12px; gap: 10px; }
   .game-title { font-size: 14px; }
