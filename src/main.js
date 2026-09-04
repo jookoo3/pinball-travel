@@ -1,7 +1,8 @@
 // main.js — 화면 전환, 게임 세션 관리
-import './style.css'
+// style.css는 FOUC 방지를 위해 index.html에서 <link>로 직접 로드한다
 import { loadGeo, buildArena, REGIONS } from './geo.js'
 import { createGame, MAP_RECT } from './game.js'
+import { isMuted, setMuted } from './audio.js'
 
 const $ = (s) => document.querySelector(s)
 const screens = { home: $('#screen-home'), game: $('#screen-game') }
@@ -24,10 +25,27 @@ if (window.visualViewport) {
 
 const app = {
   timeMode: '20',      // '10' | '20' | '30' | 'custom' | 'random'
+  startMode: 'random', // 'random' | 'pick' — 착지 지점을 랜덤으로 뽑는지 직접 고를지
   mode: null,          // 'province' | 'city'
   game: null,
   lastResult: null,    // 결과 zone
 }
+
+// ── 소리 끄기/켜기 (설정은 localStorage에 저장되어 다음 방문에도 유지) ───────
+function renderMuteBtn() {
+  const m = isMuted()
+  const btn = $('#btn-mute')
+  btn.textContent = m ? '🔇' : '🔊'
+  btn.classList.toggle('muted', m)
+  btn.setAttribute('aria-pressed', String(m))
+  btn.title = btn.ariaLabel = m ? '소리 켜기' : '소리 끄기'
+}
+$('#btn-mute').addEventListener('click', () => {
+  setMuted(!isMuted())
+  renderMuteBtn()
+  toast(isMuted() ? '🔇 효과음을 꺼었어요' : '🔊 효과음을 켰어요')
+})
+renderMuteBtn()
 
 // ── 공유 링크로 들어온 경우: 친구가 뽑은 결과 배너 표시 ────────
 // URL 쿼리(r/e/m)는 사용자 입력이 그대로 들어올 수 있으므로 innerHTML이 아닌
@@ -104,6 +122,30 @@ $('#custom-time')?.addEventListener('input', () => {
   if (app.timeMode === 'custom') $('#timer-num').textContent = timerLabel()
 })
 
+// ── 착지 지점 선택 (게임 화면) ──────────────────────────────────
+const HINT_LAUNCH = '🎯 플런저를 <b>아래로 당겼다 놓아</b> 발사하세요'
+const HINT_PICK = '👆 <b>지도를 눌러 착지 지점</b>을 정한 뒤 발사하세요'
+function applyStartMode() {
+  const pick = app.startMode === 'pick'
+  $('#btn-reroll').classList.toggle('hidden', pick)
+  $('#hint').innerHTML = pick ? HINT_PICK : HINT_LAUNCH // 상수 문자열만 삽입(사용자 입력 없음)
+  app.game?.setPickMode(pick)
+}
+document.querySelectorAll('.start-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (app.game && app.game.state.phase !== 'ready') return
+    document.querySelectorAll('.start-btn').forEach(b => b.classList.remove('active'))
+    btn.classList.add('active')
+    app.startMode = btn.dataset.start
+    applyStartMode()
+  })
+})
+$('#btn-reroll').addEventListener('click', () => {
+  if (!app.game || app.game.state.phase !== 'ready') return
+  app.game.rerollEntry()
+  toast('🔀 착지 지점을 다시 뽑았어요')
+})
+
 document.querySelectorAll('.mode-card').forEach(card => {
   card.addEventListener('click', () => {
     const mode = card.dataset.mode
@@ -140,19 +182,26 @@ async function startGame({ mode, regionKey = null }) {
     $('#timer-fill').style.width = '100%'
     $('#timer-fill').classList.remove('danger')
     $('#time-select').classList.remove('locked')
+    $('#start-select').classList.remove('locked')
 
     app.game = createGame($('#game-canvas'), arena, {
       duration: () => resolveDuration(),
       onEnter: () => $('#hint').classList.add('hidden'),
       onFinish: (zone) => showResult(zone),
+      onPick: (ok) => toast(ok ? '📍 착지 지점 설정!' : '육지 위를 선택해주세요'),
     })
     window.__game = app.game // 디버그/테스트용
+    applyStartMode()
 
     // 타이머 UI 갱신
     const tick = setInterval(() => {
       if (!app.game || app.game.state.destroyed) { clearInterval(tick); return }
       const s = app.game.state
-      if (s.phase !== 'ready') $('#time-select').classList.add('locked')
+      if (s.phase !== 'ready') {
+        $('#time-select').classList.add('locked')
+        $('#start-select').classList.add('locked')
+        $('#game-canvas').classList.remove('picking')
+      }
       if (s.phase === 'play' || s.phase === 'done') {
         $('#timer-num').textContent = Math.ceil(s.timeLeft)
         $('#timer-fill').style.width = `${(s.timeLeft / s.duration) * 100}%`
@@ -199,13 +248,21 @@ function toast(msg) {
   toastTimer = setTimeout(() => el.classList.remove('show'), 2200)
 }
 
+// 공유 시 매번 랜덤으로 고르는 유도 멘트 (받는 사람이 "나도 해봐야지" 싶게)
+const SHARE_COMMENTS = [
+  (place, emoji) => `${emoji} 나는 「${place}」 뽑았는데 너도 한번 해봐`,
+  (place, emoji) => `${emoji} 어 「${place}」 떴다ㅋㅋ 너도 핀볼 굴려봐`,
+  (place, emoji) => `여기 「${place}」 나왔는데... 바로 여행 ㄱ? ${emoji}`,
+  (place, emoji) => `핀볼 결과 「${place}」! ${emoji} 너는 어디 나올지 안 궁금해?`,
+]
+
 $('#btn-share').addEventListener('click', async () => {
   const z = app.lastResult
   if (!z) return
   const place = z.parent ? `${z.parent} ${z.name}` : z.name
   const modeName = app.mode === 'province' ? '팔도 유람' : app.mode === 'city-all' ? '전국 일주' : '자세히 정하기'
-  // 받는 사람이 "나도 해봐야지" 싶게 유도하는 멘트
-  const comment = `🎱 나는 「${place}」 나왔어! 너도 핀볼 굴려서 어디 나오는지 해봐`
+  const pick = SHARE_COMMENTS[Math.floor(Math.random() * SHARE_COMMENTS.length)]
+  const comment = pick(place, z.emoji || '🎯')
   // 링크에 결과를 담아 공유 — 받는 사람이 링크를 열면 결과 배너로 바로 보임(유튜브 링크 미리보기와 유사)
   const url = `${location.origin}/?r=${encodeURIComponent(place)}&e=${encodeURIComponent(z.emoji || '')}&m=${encodeURIComponent(modeName)}`
   const text = comment

@@ -9,7 +9,14 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="description" content="한반도 핀볼 여행 — 핀볼을 튕겨 다음 여행지를 정하세요" />
     <title>Pinball Travel · 한반도 핀볼 여행</title>
-
+    <!-- style.css를 <link>로 직접 로드해 렌더링을 막아야(render-blocking) 새로고침 시
+         스타일 없는 화면이나 카드 placeholder가 잠깐 노출되는 FOUC를 막을 수 있다 -->
+    <link rel="stylesheet" href="/src/style.css" />
+    <style>
+      /* 위 스타일시트가 아주 잠깐이라도 늦게 적용될 경우를 대비한 최소 안전장치 */
+      html, body { background: #070b1e; }
+      .overlay { opacity: 0; pointer-events: none; }
+    </style>
     <!-- ══ 링크 공유 시 미리보기 카드(Open Graph / Twitter Card) ══ -->
     <!-- TODO: 실제 배포 도메인이 정해지면 아래 og:url / og:image의 https://pinballtravel.app 을 교체하세요 -->
     <meta property="og:type" content="website" />
@@ -73,25 +80,36 @@
             <div class="timer-num" id="timer-num">--</div>
             <div class="timer-bar"><div class="timer-fill" id="timer-fill"></div></div>
           </div>
+          <button id="btn-mute" class="icon-btn" aria-label="소리 끄기" aria-pressed="false" title="소리 끄기">🔊</button>
         </div>
-        <div class="time-select" id="time-select">
-          <span class="time-label">⏱ 시간</span>
-          <div class="time-btns">
-            <button class="time-btn" data-time="10">10초</button>
-            <button class="time-btn active" data-time="20">20초</button>
-            <button class="time-btn" data-time="30">30초</button>
-            <button class="time-btn" data-time="custom">✏️ 직접입력</button>
-            <button class="time-btn" data-time="random">🎲 랜덤</button>
+        <div class="game-controls">
+          <div class="time-select" id="time-select">
+            <span class="ctl-label">⏱ <span class="txt">시간</span></span>
+            <div class="seg">
+              <button class="time-btn" data-time="10">10초</button>
+              <button class="time-btn active" data-time="20">20초</button>
+              <button class="time-btn" data-time="30">30초</button>
+              <button class="time-btn" data-time="custom">✏️ 직접입력</button>
+              <button class="time-btn" data-time="random">🎲 랜덤</button>
+            </div>
+            <div id="custom-time-wrap" class="custom-time hidden">
+              <input id="custom-time" type="number" min="1" max="120" value="15" inputmode="numeric" />
+              <span>초</span>
+            </div>
+            <div id="random-time-hint" class="random-hint hidden">발사 시 1~60초 무작위!</div>
           </div>
-          <div id="custom-time-wrap" class="custom-time hidden">
-            <input id="custom-time" type="number" min="1" max="120" value="15" inputmode="numeric" />
-            <span>초</span>
+          <div class="start-select" id="start-select">
+            <span class="ctl-label">📍 <span class="txt">착지</span></span>
+            <div class="seg">
+              <button class="start-btn active" data-start="random">🎲 랜덤</button>
+              <button class="start-btn" data-start="pick">👆 직접 선택</button>
+            </div>
+            <button id="btn-reroll" class="mini-btn" title="착지 지점 다시 뽑기">🔀 다시 뽑기</button>
           </div>
-          <div id="random-time-hint" class="random-hint hidden">발사 시 1~60초 무작위!</div>
         </div>
         <div class="canvas-wrap">
           <canvas id="game-canvas"></canvas>
-          <div id="hint" class="hint">🎯 오른쪽 플런저를 <b>아래로 당겼다 놓아</b> 발사하세요</div>
+          <div id="hint" class="hint">🎯 플런저를 <b>아래로 당겼다 놓아</b> 발사하세요</div>
         </div>
       </section>
 

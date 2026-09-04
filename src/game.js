@@ -1,5 +1,6 @@
 // game.js — Matter.js 물리 + 캔버스 렌더링 핀볼 게임
 import Matter from 'matter-js'
+import { playHit, playWarp } from './audio.js'
 
 const { Engine, World, Bodies, Body, Events, Composite } = Matter
 
@@ -10,8 +11,8 @@ const LANE_L = CANVAS_W - 86   // 발사 레인 왼쪽 벽
 const LANE_R = CANVAS_W - 20   // 발사 레인 오른쪽 벽
 const LANE_CX = (LANE_L + LANE_R) / 2
 const BALL_R = 9
-const GAP_HALF = 26            // 북쪽 관문 반폭
 const WALL_T = 12
+const LANE_PORTAL_Y = 90       // 발사 레인 끝 — 여기 닿으면 진입 포탈을 타고 지도로 이동
 const PLUNGER_MARGIN = 210     // 발사대(플런저) 하단 여유 공간 — 기존 120에서 확대해 당기고 쏘는 조작감을 개선
 const PLUNGER_TRAVEL = 115     // 플런저가 눌리는 최대 시각적 이동 거리 — 기존 70
 const PLUNGER_DRAG_DIST = 175  // 100% 파워가 되는 데 필요한 드래그 거리(px) — 기존 150
@@ -93,7 +94,7 @@ function randomLandPoint(ring, margin = 26) {
   return centroidOf(ring)
 }
 
-export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) {
+export function createGame(canvas, arena, { duration = 15, onFinish, onEnter, onPick }) {
   const ctx = canvas.getContext('2d')
 
   // ── 모바일 레티나 대응 ───────────────────────────────────
@@ -113,80 +114,40 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
 
   const mainRing = chaikin(decimate(arena.mainland.poly[0], 9))
 
-  // ── 북쪽 관문(입구): 본토 최상단 지점 ──────────────────────
-  let gapIdx = 0
-  for (let i = 1; i < mainRing.length; i++) if (mainRing[i][1] < mainRing[gapIdx][1]) gapIdx = i
-  const gap = mainRing[gapIdx]
-  const gapY = gap[1]
+  // 본토 해안선은 이제 완전히 닫힌 하나의 고리다 — 예전엔 북쪽에 구멍을 뚫어
+  // 곡선 레일로 이어야 했지만, 지금은 발사 레인 끝의 포탈로 곧장 순간이동하므로
+  // 입구가 필요 없다(어정쩡하게 넓어지고 좁아지던 통로 문제도 함께 사라진다).
+  const walls = [...segmentBodies(mainRing, true)]
 
-  // 관문 주변을 뚫은 본토 벽
-  const wallPts = []
-  const gapSegs = []
-  {
-    let cur = []
-    for (const p of mainRing) {
-      if (Math.abs(p[0] - gap[0]) < GAP_HALF && p[1] < gapY + 34) {
-        if (cur.length > 1) gapSegs.push(cur)
-        cur = []
-      } else cur.push(p)
-    }
-    if (cur.length > 1) gapSegs.push(cur)
-    // 링이 관문에서 끊긴 열린 폴리라인들
-  }
-  const walls = []
-  if (gapSegs.length === 1) {
-    walls.push(...segmentBodies(gapSegs[0], false))
-  } else if (gapSegs.length >= 2) {
-    // 마지막 조각과 첫 조각은 원래 이어져 있었음 → 연결
-    const joined = [...gapSegs[gapSegs.length - 1], ...gapSegs[0]]
-    walls.push(...segmentBodies(joined, false))
-    for (let i = 1; i < gapSegs.length - 1; i++) walls.push(...segmentBodies(gapSegs[i], false))
-  } else {
-    walls.push(...segmentBodies(mainRing, true))
-  }
-  // 본토 내부 구멍(호수 등)
+  // 본토 내부 구멍(호수 등) — 렌더링과 물리 벽이 반드시 같은 좌표를 쓰도록 보관
+  const mainHoleRings = []
   for (let r = 1; r < arena.mainland.poly.length; r++) {
-    walls.push(...segmentBodies(chaikin(decimate(arena.mainland.poly[r], 8)), true))
+    const hole = chaikin(decimate(arena.mainland.poly[r], 8))
+    mainHoleRings.push(hole)
+    walls.push(...segmentBodies(hole, true))
   }
 
-  // ── 발사 레인 + 항로(채널): 안쪽 벽은 관문 쪽으로 내리막 ──
-  const chTop = 14
-  const gapL = gap[0] - GAP_HALF, gapR = gap[0] + GAP_HALF
-  const outerPath = [ // 레인 오른벽 → 상단 외곽 → 관문 왼쪽 봉인
-    [LANE_R, CANVAS_H], [LANE_R, 80], [LANE_R - 8, 40], [LANE_R - 30, chTop + 6], [LANE_R - 60, chTop],
-    [gapL + 4, chTop], [gapL - 2, gapY - 30], [gapL, gapY + 6],
-  ]
-  const innerPath = [ // 레인 왼벽 → 내리막 채널 바닥 → 관문 오른쪽 봉인
-    [LANE_L, CANVAS_H], [LANE_L, 140], [LANE_L - 8, 96], [LANE_L - 30, 68], [LANE_L - 60, 56],
-    [gapR + 8, gapY - 12], [gapR, gapY + 6],
-  ]
-  walls.push(...segmentBodies(outerPath, false, { restitution: 0.35 }))
-  walls.push(...segmentBodies(innerPath, false, { restitution: 0.35 }))
+  // ── 발사 레인: 처음부터 끝까지 곧게 뻗은 외길, 끝에는 진입 포탈이 있다 ──
+  walls.push(Bodies.rectangle(LANE_L, (CANVAS_H + LANE_PORTAL_Y) / 2, WALL_T, CANVAS_H - LANE_PORTAL_Y, { isStatic: true, restitution: 0.35 }))
+  walls.push(Bodies.rectangle(LANE_R, (CANVAS_H + LANE_PORTAL_Y) / 2, WALL_T, CANVAS_H - LANE_PORTAL_Y, { isStatic: true, restitution: 0.35 }))
   // 레인 바닥
   walls.push(Bodies.rectangle(LANE_CX, CANVAS_H - 4, LANE_R - LANE_L + 20, WALL_T, { isStatic: true }))
 
-  // 가이드 레일 곡선 (레인 꼭대기 → 관문 상공)
-  const railP0 = [LANE_CX, 96]
-  const railP1 = [LANE_CX - 10, 26]      // 제어점: 꼭대기 커브
-  const railP2 = [(LANE_CX + gap[0]) / 2, 26]
-  const railP3 = [gap[0], gapY - 26]
-  function railPoint(t) {
-    const u = 1 - t
-    return [
-      u * u * u * railP0[0] + 3 * u * u * t * railP1[0] + 3 * u * t * t * railP2[0] + t * t * t * railP3[0],
-      u * u * u * railP0[1] + 3 * u * u * t * railP1[1] + 3 * u * t * t * railP2[1] + t * t * t * railP3[1],
-    ]
-  }
-  let railLen = 0
-  {
-    let prev = railPoint(0)
-    for (let i = 1; i <= 40; i++) {
-      const p = railPoint(i / 40)
-      railLen += Math.hypot(p[0] - prev[0], p[1] - prev[1])
-      prev = p
+  // 발사 레인 끝(진입 포탈) ↔ 지도 위 착지 지점을 잇는 메인 포탈.
+  // 다른 웜홀보다 크고 화려하게(hue=골드 계열) 그려 "이게 메인 입구"임을 알려준다.
+  const entryPortal = { a: [LANE_CX, LANE_PORTAL_Y], b: randomLandPoint(mainRing, 40), r: 30, hue: 46 }
+  // 사용자가 직접 고른 지점이 "공이 갇히지 않고 내려설 수 있는 육지"인지 확인
+  function isLandable(pt) {
+    const rings = [mainRing, ...islandRings]
+    const ring = rings.find(r => pointInRing(pt, r))
+    if (!ring) return false
+    if (mainHoleRings.some(h => pointInRing(pt, h))) return false
+    const margin = ring === mainRing ? 18 : 14
+    for (let i = 0; i < ring.length; i++) {
+      if (Math.hypot(ring[i][0] - pt[0], ring[i][1] - pt[1]) < margin) return false
     }
+    return true
   }
-
   // ── 섬 아레나 + 웜홀 ─────────────────────────────────────
   const portals = []
   const islandRings = []
@@ -233,6 +194,7 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
   function freeBumperSpot(avoidBallDist = 0) {
     for (let t = 0; t < 40; t++) {
       const pt = randomLandPoint(mainRing, 34)
+      if (Math.hypot(entryPortal.b[0] - pt[0], entryPortal.b[1] - pt[1]) < 60) continue
       if (portals.some(p => Math.hypot(p.a[0] - pt[0], p.a[1] - pt[1]) < 60)) continue
       if (spinners.some(s => Math.hypot(s.x - pt[0], s.y - pt[1]) < s.len / 2 + 44)) continue
       if (bumpers.some(b => Math.hypot(b.x - pt[0], b.y - pt[1]) < 80)) continue
@@ -251,9 +213,7 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
     bumperBodies.push(body)
   }
 
-  // 관문이 닫힐 때 생기는 벽 — draw()에서 그리기 위해 형상을 보관해둔다
-  // (보관하지 않으면 봉인 후 화면에 안 보이는 '투명 벽'이 되어 공이 이유 없이 튕겨 보인다)
-  let gateWall = null
+  let lastHitSoundT = -1 // 충돌음이 한 프레임에 여러 번 겹쳐 울리지 않도록 쿨다운
 
   // ── 공 ────────────────────────────────────────────────────
   const plungerRestY = CANVAS_H - PLUNGER_MARGIN
@@ -272,10 +232,8 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
     dragging: false,
     dragStartY: 0,
     trail: [],
-    gateClosed: false,
-    onRail: false,
-    railT: 0,
-    railSpeed: 0,
+    pickMode: false,       // true면 발사 전에 지도를 눌러 착지 지점을 직접 정한다
+    pickFlash: 0,          // 착지 지점 변경 직후 번쩍 연출
     slowTime: 0,
     resultZone: null,
     gustTimer: 1.6,
@@ -327,6 +285,15 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
         s.ghostUntil = state.t + 1 + Math.random() * 4
         s.body.isSensor = true
       }
+
+      // 벽·스피너·범퍼에 부딪힐 때 나는 공통 타격음(속도에 비례, 너무 잦으면 쿨다운)
+      if ((pair.bodyA === ball || pair.bodyB === ball) && state.phase !== 'done') {
+        const sp = Math.hypot(ball.velocity.x, ball.velocity.y)
+        if (sp > 1.5 && state.t - lastHitSoundT > 0.05) {
+          lastHitSoundT = state.t
+          playHit(Math.min(1, sp / 14))
+        }
+      }
     }
   })
 
@@ -345,6 +312,14 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
     if (x > LANE_L - 20 && y > CANVAS_H - PLUNGER_ZONE) {
       state.dragging = true
       state.dragStartY = y
+      e.preventDefault()
+      return
+    }
+    // 직접 선택 모드: 지도를 눌러 착지 지점 지정
+    if (state.pickMode && x < LANE_L - 10) {
+      const ok = isLandable([x, y])
+      if (ok) { entryPortal.b = [x, y]; state.pickFlash = 1 }
+      onPick?.(ok)
       e.preventDefault()
     }
   }
@@ -392,28 +367,8 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
     }
 
     // 발사 튜브 효과: 레인 상승 중 중력 대부분 상쇄
-    if (ball.position.x > LANE_L - 10 && !state.onRail) {
+    if (ball.position.x > LANE_L - 10) {
       Body.applyForce(ball, ball.position, { x: 0, y: -engine.gravity.y * ball.mass * 0.00082 })
-    }
-
-    // 가이드 레일: 레인 꼭대기 도달 → 곡선 항로를 따라 관문까지 유도
-    // (가이드는 방향만 바꿀 뿐 속도는 조절하지 않음 — 진입 속도를 그대로 유지해
-    //  플런저를 당긴 세기가 최종 속도에 그대로 반영되도록 함)
-    if (state.phase === 'launched' && !state.onRail && ball.position.y < 110 && ball.position.x > LANE_L - 10 && ball.velocity.y < 0) {
-      state.onRail = true
-      state.railT = 0
-      state.railSpeed = Math.hypot(ball.velocity.x, ball.velocity.y)
-    }
-    if (state.onRail) {
-      state.railT += (state.railSpeed * (dt / 16.6)) / railLen
-      const t = Math.min(1, state.railT)
-      const p = railPoint(t)
-      Body.setPosition(ball, { x: p[0], y: p[1] })
-      Body.setVelocity(ball, { x: 0, y: 0 })
-      if (t >= 1) {
-        state.onRail = false
-        Body.setVelocity(ball, { x: (Math.random() - 0.5) * 3, y: state.railSpeed })
-      }
     }
 
     // 준비 상태: 공을 플런저 헤드 위에 고정
@@ -438,20 +393,12 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
       state.trail.length = 0
     }
 
-    // 아레나 진입 감지 → 타이머 시작 + 게이트 봉인 + 무중력 전환
-    if ((state.phase === 'launched') && ball.position.y > gapY + 44 && ball.position.x < LANE_L - 30) {
+    // 레인 끝 진입 포탈 도달 → 지도 위 착지 지점으로 순간이동 + 무중력 전환
+    if (state.phase === 'launched' && ball.velocity.y < 0 && ball.position.y <= entryPortal.a[1] + 4) {
+      teleport(entryPortal.b, 0)
       state.phase = 'play'
       engine.gravity.y = 0 // Zero-G: 위아래 치우침 없이 5:5로 떠다님
-      if (!state.gateClosed) {
-        state.gateClosed = true
-        const gateAngle = Math.atan2(
-          mainRing[(gapIdx + 4) % mainRing.length][1] - mainRing[(gapIdx - 4 + mainRing.length) % mainRing.length][1],
-          mainRing[(gapIdx + 4) % mainRing.length][0] - mainRing[(gapIdx - 4 + mainRing.length) % mainRing.length][0])
-        const gateLen = GAP_HALF * 2 + 26
-        World.add(engine.world, Bodies.rectangle(gap[0], gapY + 2, gateLen, WALL_T,
-          { isStatic: true, restitution: 0.85, angle: gateAngle }))
-        gateWall = { x: gap[0], y: gapY + 2, len: gateLen, angle: gateAngle }
-      }
+      playWarp()
       onEnter?.()
     }
 
@@ -506,8 +453,8 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
         if (p.cool > 0) continue
         const dA = Math.hypot(ball.position.x - p.a[0], ball.position.y - p.a[1])
         const dB = Math.hypot(ball.position.x - p.b[0], ball.position.y - p.b[1])
-        if (dA < p.r) { teleport(p.b); p.cool = 1.2 }
-        else if (dB < p.r) { teleport(p.a); p.cool = 1.2 }
+        if (dA < p.r) { teleport(p.b); p.cool = 1 + Math.random() * 2; playWarp() }
+        else if (dB < p.r) { teleport(p.a); p.cool = 1 + Math.random() * 2; playWarp() }
       }
       if (state.timeLeft <= 0) {
         state.timeLeft = 0
@@ -529,6 +476,7 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
       b.flash *= 0.9
       b.spawn = Math.min(1, b.spawn + dt / 350)
     }
+    state.pickFlash *= 0.92
 
     // 스피너 회전 갱신 (마찰 감쇠) + 통과 상태 해제
     for (const s of spinners) {
@@ -546,9 +494,9 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
     raf = requestAnimationFrame(loop)
   }
 
-  function teleport(to) {
+  function teleport(to, offsetY = -20) {
     const v = ball.velocity
-    Body.setPosition(ball, { x: to[0], y: to[1] - 20 })
+    Body.setPosition(ball, { x: to[0], y: to[1] + offsetY })
     const sp = Math.max(4, Math.hypot(v.x, v.y) * 0.8)
     const a = Math.random() * Math.PI * 2
     Body.setVelocity(ball, { x: Math.cos(a) * sp * 0.6, y: Math.sin(a) * sp * 0.6 })
@@ -609,57 +557,25 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
     ctx.globalAlpha = 1
 
     // 해안선 네온
+    // 실제 충돌 벽(mainRing/mainHoleRings/islandRings)과 100% 동일한 좌표를 그려서
+    // "보이는 해안선"과 "물리적 벽"이 어긋나 생기던 투명 벽 버그를 근본적으로 제거한다.
     ctx.save()
     ctx.shadowColor = '#5f7bff'
     ctx.shadowBlur = 14
     ctx.strokeStyle = 'rgba(140,165,255,0.9)'
     ctx.lineWidth = 2.4
     ctx.beginPath()
-    tracePoly(arena.mainland.poly)
-    for (const isl of arena.islands) tracePoly(isl.poly)
+    tracePoly([mainRing, ...mainHoleRings, ...islandRings])
     ctx.stroke()
     ctx.restore()
 
-    // 관문 표시
-    if (!state.gateClosed) {
-      ctx.save()
-      ctx.strokeStyle = `rgba(255,220,120,${0.5 + 0.5 * Math.sin(state.t * 5)})`
-      ctx.setLineDash([6, 6])
-      ctx.lineWidth = 3
-      ctx.beginPath(); ctx.moveTo(gapL, gapY); ctx.lineTo(gapR, gapY); ctx.stroke()
-      ctx.restore()
-    } else if (gateWall) {
-      // 봉인된 관문 벽 — 실제 충돌체 위치와 각도에 맞춰 그려서 "투명 벽"처럼 보이지 않게 함
-      const hx = Math.cos(gateWall.angle) * (gateWall.len / 2)
-      const hy = Math.sin(gateWall.angle) * (gateWall.len / 2)
-      ctx.save()
-      ctx.shadowColor = '#5f7bff'
-      ctx.shadowBlur = 10
-      ctx.strokeStyle = 'rgba(140,165,255,0.9)'
-      ctx.lineWidth = WALL_T * 0.9
-      ctx.lineCap = 'round'
-      ctx.beginPath()
-      ctx.moveTo(gateWall.x - hx, gateWall.y - hy)
-      ctx.lineTo(gateWall.x + hx, gateWall.y + hy)
-      ctx.stroke()
-      ctx.restore()
-    }
+    // 메인 진입 포탈: 레인 끝(정면)과 지도 위 착지 지점(바닥에 놓인 원반 + 빛기둥)
+    drawMainPortal(entryPortal.a[0], entryPortal.a[1], entryPortal.r, entryPortal.hue, { squash: 1 })
+    drawMainPortal(entryPortal.b[0], entryPortal.b[1], entryPortal.r, entryPortal.hue, { squash: 0.55, beam: true })
+    if (state.phase === 'ready' && state.pickMode) drawPickReticle(entryPortal.b[0], entryPortal.b[1], entryPortal.r)
 
-    // 항로(채널) 네온 가이드
-    drawPath(outerPath, 'rgba(120,220,255,0.55)')
-    drawPath(innerPath, 'rgba(120,220,255,0.55)')
-
-    // 가이드 레일 (점선 곡선)
-    ctx.save()
-    ctx.strokeStyle = 'rgba(255,214,120,0.4)'
-    ctx.setLineDash([4, 8])
-    ctx.lineDashOffset = -state.t * 40
-    ctx.lineWidth = 2
-    ctx.beginPath()
-    ctx.moveTo(railP0[0], railP0[1])
-    for (let i = 1; i <= 30; i++) { const p = railPoint(i / 30); ctx.lineTo(p[0], p[1]) }
-    ctx.stroke()
-    ctx.restore()
+    // 발사 레인: 처음부터 포탈까지 곧게 뻗은 유리관 (폭이 절대 변하지 않는다)
+    drawLaneTube()
 
     // 웜홀
     for (const p of portals) {
@@ -752,18 +668,37 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
     drawHUD()
   }
 
-  function drawPath(pts, color) {
-    ctx.save()
-    ctx.strokeStyle = color
-    ctx.lineWidth = 3
-    ctx.shadowColor = color
-    ctx.shadowBlur = 8
-    ctx.lineJoin = 'round'
-    ctx.beginPath()
-    ctx.moveTo(pts[0][0], pts[0][1])
-    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1])
-    ctx.stroke()
-    ctx.restore()
+
+  // 발사 레인: 처음부터 진입 포탈까지 곧게 뻗은 유리관 (폭이 LANE_L~LANE_R로 고정이라
+  // 절대 넓어지거나 좁아지지 않는다) + 포탈 방향(위쪽)으로 흐르는 빛 입자
+  function drawLaneTube() {
+    const laneW = LANE_R - LANE_L
+    const tube = ctx.createLinearGradient(LANE_L, 0, LANE_R, 0)
+    tube.addColorStop(0, 'rgba(70,90,160,0.30)')
+    tube.addColorStop(0.5, 'rgba(120,150,235,0.10)')
+    tube.addColorStop(1, 'rgba(70,90,160,0.30)')
+    ctx.fillStyle = tube
+    ctx.fillRect(LANE_L, LANE_PORTAL_Y, laneW, CANVAS_H - LANE_PORTAL_Y)
+    for (const rx of [LANE_L, LANE_R]) {
+      const rail = ctx.createLinearGradient(rx - 3, 0, rx + 3, 0)
+      rail.addColorStop(0, '#2a3566')
+      rail.addColorStop(0.5, '#8fa3e8')
+      rail.addColorStop(1, '#2a3566')
+      ctx.fillStyle = rail
+      ctx.fillRect(rx - 3, LANE_PORTAL_Y, 6, CANVAS_H - LANE_PORTAL_Y)
+    }
+
+    for (let i = 0; i < 3; i++) {
+      const t = (state.t * 0.35 + i / 3) % 1
+      const y = CANVAS_H - t * (CANVAS_H - LANE_PORTAL_Y)
+      ctx.save()
+      ctx.globalAlpha = 0.25 + 0.55 * Math.sin(t * Math.PI)
+      ctx.shadowColor = '#ffd478'
+      ctx.shadowBlur = 11
+      ctx.fillStyle = '#fff3d6'
+      ctx.beginPath(); ctx.arc(LANE_CX, y, 3.2, 0, 7); ctx.fill()
+      ctx.restore()
+    }
   }
 
   function drawPortal(x, y, r, hue) {
@@ -780,26 +715,152 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
     ctx.restore()
   }
 
+  // 메인 진입 포탈 — 3D 소용돌이 느낌.
+  // squash<1이면 원을 세로로 눌러 "바닥에 놓인 원반"으로 보이게 하고(원근 효과),
+  // 어두운 중심→밝은 테두리 깔때기 + 나선 팔 + 깊이별 링 + 림 하이라이트 + 밖에서 안으로
+  // 다이빙 들어가는 입자로 입체감을 만든다.
+  function drawMainPortal(x, y, r, hue, { squash = 1, beam = false } = {}) {
+    const t = state.t
+    const flash = state.pickFlash
+
+    // 바닥 포탈 위로 솟아오르는 빛기둥
+    if (beam) {
+      const bh = r * 4.6
+      ctx.save()
+      const g = ctx.createLinearGradient(0, y, 0, y - bh)
+      g.addColorStop(0, `hsla(${hue},100%,78%,${0.34 + flash * 0.3})`)
+      g.addColorStop(0.5, `hsla(${hue},100%,78%,0.12)`)
+      g.addColorStop(1, `hsla(${hue},100%,78%,0)`)
+      ctx.fillStyle = g
+      ctx.beginPath()
+      ctx.moveTo(x - r * 0.62, y); ctx.lineTo(x + r * 0.62, y)
+      ctx.lineTo(x + r * 0.22, y - bh); ctx.lineTo(x - r * 0.22, y - bh)
+      ctx.closePath(); ctx.fill()
+      // 기둥 안을 떠오르는 반짝이
+      for (let i = 0; i < 4; i++) {
+        const p = (t * 0.45 + i / 4) % 1
+        const px = x + Math.sin(t * 3 + i * 2) * r * 0.3 * (1 - p)
+        const py = y - p * bh
+        ctx.globalAlpha = (1 - p) * 0.8
+        ctx.fillStyle = '#fff8e6'
+        ctx.beginPath(); ctx.arc(px, py, 1.6, 0, 7); ctx.fill()
+      }
+      ctx.restore()
+    }
+
+    ctx.save()
+    ctx.translate(x, y)
+    ctx.scale(1, squash)
+
+    // 바깥 후광
+    const halo = ctx.createRadialGradient(0, 0, r * 0.4, 0, 0, r * 2.1)
+    halo.addColorStop(0, `hsla(${hue},95%,70%,${0.32 + flash * 0.3})`)
+    halo.addColorStop(1, `hsla(${hue},95%,60%,0)`)
+    ctx.fillStyle = halo
+    ctx.beginPath(); ctx.arc(0, 0, r * 2.1, 0, 7); ctx.fill()
+
+    // 깔때기: 중심은 깊고 어둡게, 가장자리로 갈수록 밝게 → 움푹 파인 입체감
+    const funnel = ctx.createRadialGradient(0, 0, 0, 0, 0, r)
+    funnel.addColorStop(0, '#04061a')
+    funnel.addColorStop(0.42, `hsla(${hue},70%,22%,0.95)`)
+    funnel.addColorStop(0.78, `hsla(${hue},92%,55%,0.95)`)
+    funnel.addColorStop(1, `hsla(${hue},100%,86%,0.75)`)
+    ctx.fillStyle = funnel
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.fill()
+
+    // 나선 팔 3개 — 안으로 휘감기며 회전
+    ctx.save()
+    ctx.rotate(t * 1.5)
+    ctx.lineCap = 'round'
+    for (let arm = 0; arm < 3; arm++) {
+      const a0 = arm * ((Math.PI * 2) / 3)
+      for (let k = 0; k < 14; k++) {
+        const k0 = k / 14, k1 = (k + 1) / 14
+        const r0 = r * (0.14 + 0.82 * k0), r1 = r * (0.14 + 0.82 * k1)
+        const ang0 = a0 + k0 * 4.2, ang1 = a0 + k1 * 4.2
+        ctx.strokeStyle = `hsla(${hue},100%,${80 - k0 * 30}%,${0.85 - k0 * 0.7})`
+        ctx.lineWidth = 1.2 + k0 * 2.2
+        ctx.beginPath()
+        ctx.moveTo(Math.cos(ang0) * r0, Math.sin(ang0) * r0)
+        ctx.lineTo(Math.cos(ang1) * r1, Math.sin(ang1) * r1)
+        ctx.stroke()
+      }
+    }
+    ctx.restore()
+
+    // 깊이 링: 안쪽으로 갈수록 작고 흐릿하게(원근)
+    for (let i = 0; i < 4; i++) {
+      const rr = r * (0.94 - i * 0.2)
+      ctx.strokeStyle = `hsla(${hue},95%,${75 - i * 8}%,${0.55 - i * 0.11})`
+      ctx.lineWidth = 1.4
+      ctx.beginPath(); ctx.arc(0, 0, rr, 0, 7); ctx.stroke()
+    }
+
+    // 림 하이라이트: 위쪽 테두리가 더 밝게 → 위에서 받는 조명 느낌
+    ctx.strokeStyle = 'rgba(255,255,255,0.75)'
+    ctx.lineWidth = 2.2
+    ctx.shadowColor = '#fff'
+    ctx.shadowBlur = 8
+    ctx.beginPath(); ctx.arc(0, 0, r, Math.PI * 1.15, Math.PI * 1.85); ctx.stroke()
+    ctx.shadowBlur = 0
+
+    // 밑쪽 그림자 테두리
+    ctx.strokeStyle = `hsla(${hue},80%,35%,0.8)`
+    ctx.lineWidth = 2.4
+    ctx.beginPath(); ctx.arc(0, 0, r, Math.PI * 0.15, Math.PI * 0.85); ctx.stroke()
+    ctx.restore()
+
+    // 밖에서 안으로 나선을 그리며 빨려 들어가는 입자
+    for (let i = 0; i < 9; i++) {
+      const p = (t * 0.55 + i / 9) % 1
+      const rad = r * (1.9 - 1.75 * p)
+      const ang = p * 7 + i * 0.75 + t * 0.4
+      const px = x + Math.cos(ang) * rad
+      const py = y + Math.sin(ang) * rad * squash
+      ctx.save()
+      ctx.globalAlpha = 0.15 + 0.85 * p
+      ctx.shadowColor = `hsla(${hue},100%,80%,0.9)`
+      ctx.shadowBlur = 6
+      ctx.fillStyle = p > 0.7 ? '#ffffff' : '#fff2cc'
+      ctx.beginPath(); ctx.arc(px, py, 1.2 + 1.6 * p, 0, 7); ctx.fill()
+      ctx.restore()
+    }
+  }
+
+  // 직접 선택 모드에서 착지 지점 위에 떠 있는 조준선
+  function drawPickReticle(x, y, r) {
+    const R = r * 1.55 + 3 * Math.sin(state.t * 4)
+    ctx.save()
+    ctx.translate(x, y)
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)'
+    ctx.lineWidth = 1.6
+    ctx.setLineDash([6, 6])
+    ctx.lineDashOffset = -state.t * 30
+    ctx.beginPath(); ctx.arc(0, 0, R, 0, 7); ctx.stroke()
+    ctx.setLineDash([])
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      ctx.beginPath()
+      ctx.moveTo(dx * (R - 8), dy * (R - 8)); ctx.lineTo(dx * (R + 8), dy * (R + 8))
+      ctx.stroke()
+    }
+    ctx.fillStyle = 'rgba(10,16,48,0.85)'
+    ctx.font = 'bold 11px sans-serif'
+    ctx.textAlign = 'center'
+    const label = '착지 지점 — 지도를 눌러 변경'
+    const w = ctx.measureText(label).width + 16
+    roundRect(-w / 2, -R - 26, w, 18, 9); ctx.fill()
+    ctx.fillStyle = '#ffe9a8'
+    ctx.fillText(label, 0, -R - 13)
+    ctx.restore()
+  }
+
   function drawPlunger() {
     const pull = state.plungerPull * PLUNGER_TRAVEL
     const py = plungerRestY + pull
     const laneW = LANE_R - LANE_L
 
-    // ── 레인 튜브: 유리관 느낌 배경 + 메탈 레일 ──
-    const tube = ctx.createLinearGradient(LANE_L, 0, LANE_R, 0)
-    tube.addColorStop(0, 'rgba(70,90,160,0.30)')
-    tube.addColorStop(0.5, 'rgba(120,150,235,0.10)')
-    tube.addColorStop(1, 'rgba(70,90,160,0.30)')
-    ctx.fillStyle = tube
-    ctx.fillRect(LANE_L, chTop, laneW, CANVAS_H)
-    for (const rx of [LANE_L, LANE_R]) {
-      const rail = ctx.createLinearGradient(rx - 3, 0, rx + 3, 0)
-      rail.addColorStop(0, '#2a3566')
-      rail.addColorStop(0.5, '#8fa3e8')
-      rail.addColorStop(1, '#2a3566')
-      ctx.fillStyle = rail
-      ctx.fillRect(rx - 3, chTop, 6, CANVAS_H)
-    }
+    // 레인 유리관 자체는 drawLaneTube()에서 이미 그렸으므로(포탈까지 한 번에 이어지는
+    // 통로) 여기서는 발사대(스프링·로드·베이스) 부속만 그린다.
 
     // 발사 준비 시 위로 흐르는 셰브런(∧) 유도등
     if (state.phase === 'ready') {
@@ -808,7 +869,7 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
       ctx.lineCap = 'round'
       for (let i = 0; i < 6; i++) {
         const yy = plungerRestY - 80 - i * 88 + ((state.t * 60) % 88)
-        if (yy < chTop + 30) continue
+        if (yy < LANE_PORTAL_Y + 30) continue
         const a = 0.15 + 0.55 * Math.abs(Math.sin(state.t * 2 + i))
         ctx.strokeStyle = `rgba(255,200,110,${a})`
         ctx.beginPath()
@@ -977,7 +1038,16 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter }) 
   return {
     get state() { return state },
     get ball() { return { x: ball.position.x, y: ball.position.y, vx: ball.velocity.x, vy: ball.velocity.y } },
-    debug: { gap, gapY, gapL, gapR },
+    debug: { entryPortal },
+    setPickMode(on) {
+      state.pickMode = !!on
+      canvas.classList.toggle('picking', state.pickMode && state.phase === 'ready')
+    },
+    rerollEntry() {
+      if (state.phase !== 'ready') return
+      entryPortal.b = randomLandPoint(mainRing, 40)
+      state.pickFlash = 1
+    },
     destroy() {
       state.destroyed = true
       cancelAnimationFrame(raf)
