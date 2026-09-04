@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0d1233"/>
+      <stop offset="100%" stop-color="#070b1e"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="30%" cy="20%" r="70%">
+      <stop offset="0%" stop-color="#1a2258" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#1a2258" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="logo" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#9db4ff"/>
+      <stop offset="45%" stop-color="#ffffff"/>
+      <stop offset="80%" stop-color="#ff5fb4"/>
+      <stop offset="100%" stop-color="#ffd43b"/>
+    </linearGradient>
+    <radialGradient id="ball" cx="35%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="55%" stop-color="#cfe0ff"/>
+      <stop offset="100%" stop-color="#7b93d8"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+  <circle cx="150" cy="120" r="2" fill="#cdd8ff"/>
+  <circle cx="1080" cy="90" r="2.5" fill="#ffffff"/>
+  <circle cx="980" cy="470" r="2" fill="#9db4ff"/>
+  <circle cx="90" cy="500" r="1.6" fill="#cdd8ff"/>
+  <circle cx="600" cy="150" r="34" fill="url(#ball)"/>
+  <text x="600" y="330" text-anchor="middle" font-family="'Pretendard','Apple SD Gothic Neo',sans-serif" font-size="108" font-weight="900" letter-spacing="4" fill="url(#logo)">PINBALL</text>
+  <text x="600" y="420" text-anchor="middle" font-family="'Pretendard','Apple SD Gothic Neo',sans-serif" font-size="64" font-weight="900" letter-spacing="22" fill="url(#logo)">TRAVEL</text>
+  <text x="600" y="480" text-anchor="middle" font-family="'Pretendard','Apple SD Gothic Neo',sans-serif" font-size="30" font-weight="600" fill="#9aa7d6">핀볼을 튕겨서 정하는 대한민국 여행지</text>
+</svg>
