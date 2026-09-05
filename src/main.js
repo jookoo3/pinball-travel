@@ -48,14 +48,44 @@ $('#btn-mute').addEventListener('click', () => {
 renderMuteBtn()
 
 // ── 공유 링크로 들어온 경우: 친구가 뽑은 결과 배너 표시 ────────
-// URL 쿼리(r/e/m)는 사용자 입력이 그대로 들어올 수 있으므로 innerHTML이 아닌
-// textContent로만 채워 XSS를 방지한다.
+function encodeShareResult({ place, emoji, modeName }) {
+  const payload = JSON.stringify([place, emoji, modeName])
+  const bytes = new TextEncoder().encode(payload)
+  let binary = ''
+  for (const byte of bytes) binary += String.fromCharCode(byte)
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+function decodeShareResult(value) {
+  try {
+    const base64 = value.replace(/-/g, '+').replace(/_/g, '/')
+    const binary = atob(base64 + '='.repeat((4 - (base64.length % 4)) % 4))
+    const bytes = Uint8Array.from(binary, char => char.charCodeAt(0))
+    const [place, emoji, modeName] = JSON.parse(new TextDecoder().decode(bytes))
+    if (typeof place !== 'string' || typeof emoji !== 'string' || typeof modeName !== 'string') return null
+    return { place: place.slice(0, 40), emoji: emoji.slice(0, 8), modeName: modeName.slice(0, 20) }
+  } catch {
+    return null
+  }
+}
+
+// 이전 버전의 r/e/m 링크가 공유 앱에서 한 번 더 인코딩된 경우도 복구한다.
+function safelyDecode(value) {
+  let decoded = value || ''
+  for (let index = 0; index < 2 && /%[0-9a-f]{2}/i.test(decoded); index++) {
+    try { decoded = decodeURIComponent(decoded) } catch { break }
+  }
+  return decoded
+}
+
+// 사용자 입력으로 만들어진 값은 innerHTML이 아닌 textContent로만 출력한다.
 function showSharedResultBanner() {
   const params = new URLSearchParams(location.search)
-  const place = params.get('r')?.slice(0, 40)
+  const compact = decodeShareResult(params.get('s') || '')
+  const place = compact?.place || safelyDecode(params.get('r')).slice(0, 40)
   if (!place) return
-  const emoji = params.get('e')?.slice(0, 8) || '🎯'
-  const modeName = params.get('m')?.slice(0, 20) || ''
+  const emoji = compact?.emoji || safelyDecode(params.get('e')).slice(0, 8) || '🎯'
+  const modeName = compact?.modeName || safelyDecode(params.get('m')).slice(0, 20)
 
   const banner = document.createElement('div')
   banner.className = 'shared-banner'
@@ -263,8 +293,8 @@ $('#btn-share').addEventListener('click', async () => {
   const modeName = app.mode === 'province' ? '팔도 유람' : app.mode === 'city-all' ? '전국 일주' : '자세히 정하기'
   const pick = SHARE_COMMENTS[Math.floor(Math.random() * SHARE_COMMENTS.length)]
   const comment = pick(place, z.emoji || '🎯')
-  // 링크에 결과를 담아 공유 — 받는 사람이 링크를 열면 결과 배너로 바로 보임(유튜브 링크 미리보기와 유사)
-  const url = `${location.origin}/?r=${encodeURIComponent(place)}&e=${encodeURIComponent(z.emoji || '')}&m=${encodeURIComponent(modeName)}`
+  // 결과를 UTF-8 Base64URL 하나로 묶어 한글 퍼센트 인코딩 링크보다 짧고 견고하게 공유한다.
+  const url = `${location.origin}/?s=${encodeShareResult({ place, emoji: z.emoji || '🎯', modeName })}`
   const text = comment
   const title = 'Pinball Travel · 한반도 핀볼 여행'
 
