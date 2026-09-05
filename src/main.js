@@ -295,19 +295,19 @@ $('#btn-share').addEventListener('click', async () => {
   const comment = pick(place, z.emoji || '🎯')
   // 결과를 UTF-8 Base64URL 하나로 묶어 한글 퍼센트 인코딩 링크보다 짧고 견고하게 공유한다.
   const url = `${location.origin}/?s=${encodeShareResult({ place, emoji: z.emoji || '🎯', modeName })}`
-  const text = comment
+  const text = `${comment}\n${url}`
   const title = 'Pinball Travel · 한반도 핀볼 여행'
 
   try {
     if (navigator.share) {
-      await navigator.share({ title, text, url })
+      await navigator.share({ title, text })
       return
     }
     throw new Error('no web share')
   } catch (err) {
     if (err?.name === 'AbortError') return // 사용자가 공유 취소
     try {
-      await navigator.clipboard.writeText(`${text}\n${url}`)
+      await navigator.clipboard.writeText(text)
       toast('📋 결과 링크가 클립보드에 복사됐어요!')
     } catch {
       toast('공유에 실패했어요 😢')
