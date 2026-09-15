@@ -124,6 +124,9 @@ function resolveDuration() {
 function show(name) {
   Object.values(screens).forEach(s => s.classList.remove('active'))
   screens[name].classList.add('active')
+  // 게임 플레이 화면(캔버스만 있고 텍스트 콘텐츠가 없는 화면)에서는
+  // AdSense 광고 요청을 멈춘다 — 홈으로 돌아올 때만 재개
+  ;(window.adsbygoogle = window.adsbygoogle || []).pauseAdRequests = name === 'game' ? 1 : 0
 }
 
 // ── 홈 화면 ──────────────────────────────────────────────
