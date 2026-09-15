@@ -3,6 +3,7 @@
 import { loadGeo, buildArena, REGIONS } from './geo.js'
 import { createGame, MAP_RECT } from './game.js'
 import { isMuted, setMuted } from './audio.js'
+import { fetchTravelInfo } from './places.js'
 
 const $ = (s) => document.querySelector(s)
 const screens = { home: $('#screen-home'), game: $('#screen-game') }
@@ -29,6 +30,7 @@ const app = {
   mode: null,          // 'province' | 'city'
   game: null,
   lastResult: null,    // 결과 zone
+  placesReqId: 0,      // 맛집/관광지 조회 요청 경쟁 방지용 토큰
 }
 
 // ── 소리 끄기/켜기 (설정은 localStorage에 저장되어 다음 방문에도 유지) ───────
@@ -254,6 +256,12 @@ function destroyGame() {
 }
 
 // ── 결과 카드 ────────────────────────────────────────────
+function renderPlaceList(listId, places, emptyMsg) {
+  const el = $(listId)
+  if (!places.length) { el.innerHTML = `<li class="places-empty">${emptyMsg}</li>`; return }
+  el.innerHTML = places.map(p => `<li><b>${p.name}</b>${p.category ? `<span>${p.category}</span>` : ''}</li>`).join('')
+}
+
 function showResult(zone) {
   app.lastResult = zone
   if (!zone) return
@@ -264,6 +272,17 @@ function showResult(zone) {
   // '더 자세히'는 8도 모드 결과에서만
   $('#btn-detail').style.display = app.mode === 'province' ? '' : 'none'
   overlay.classList.add('visible')
+
+  // 맛집·관광지: 결과가 나올 때마다 실시간 조회. 재시도/드릴다운으로 여러 번
+  // 호출될 수 있으므로 요청 토큰으로 이전 응답이 최신 화면을 덮어쓰지 않게 막는다.
+  const reqId = ++app.placesReqId
+  $('#places-food').innerHTML = '<li class="places-loading">불러오는 중…</li>'
+  $('#places-spot').innerHTML = '<li class="places-loading">불러오는 중…</li>'
+  fetchTravelInfo(zone).then(({ food, spots }) => {
+    if (reqId !== app.placesReqId) return
+    renderPlaceList('#places-food', food, '이 지역 맛집 정보를 아직 찾지 못했어요')
+    renderPlaceList('#places-spot', spots, '이 지역 명소 정보를 아직 찾지 못했어요')
+  })
 }
 
 $('#btn-detail').addEventListener('click', () => {

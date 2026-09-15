@@ -31,6 +31,9 @@
 
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5199678305878215"
      crossorigin="anonymous"></script>
+
+    <!-- 결과 화면의 실시간 맛집·관광지 추천에 사용 (kakao.maps.services.Places) -->
+    <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=0239b4782b48df7428e9b40179e87d5d&libraries=services&autoload=false"></script>
   </head>
   <body>
     <div id="app">
@@ -143,6 +146,16 @@
           <div class="card-region" id="card-region">제주도</div>
           <div class="card-sub" id="card-sub"></div>
           <div class="card-desc" id="card-desc"></div>
+          <div class="card-places" id="card-places">
+            <div class="places-col">
+              <h3>🍽 맛집 TOP3</h3>
+              <ul class="places-list" id="places-food"><li class="places-loading">불러오는 중…</li></ul>
+            </div>
+            <div class="places-col">
+              <h3>📍 가볼만한 곳 TOP3</h3>
+              <ul class="places-list" id="places-spot"><li class="places-loading">불러오는 중…</li></ul>
+            </div>
+          </div>
           <div class="card-actions">
             <button id="btn-detail" class="cta primary">🔎 더 자세히 정하기</button>
             <button id="btn-share" class="cta share">📤 결과 공유하기</button>

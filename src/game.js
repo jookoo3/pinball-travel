@@ -569,9 +569,12 @@ export function createGame(canvas, arena, { duration = 15, onFinish, onEnter, on
     ctx.stroke()
     ctx.restore()
 
-    // 메인 진입 포탈: 레인 끝(정면)과 지도 위 착지 지점(바닥에 놓인 원반 + 빛기둥)
+    // 메인 진입 포탈: 레인 끝(정면)은 항상 표시. 지도 위 착지 지점(바닥에 놓인 원반 + 빛기둥)은
+    // 공이 실제로 지도 안으로 넘어오기 전까지만 보여주고, 진입 후에는 지도 안에서 없앤다.
     drawMainPortal(entryPortal.a[0], entryPortal.a[1], entryPortal.r, entryPortal.hue, { squash: 1 })
-    drawMainPortal(entryPortal.b[0], entryPortal.b[1], entryPortal.r, entryPortal.hue, { squash: 0.55, beam: true })
+    if (state.phase !== 'play' && state.phase !== 'done') {
+      drawMainPortal(entryPortal.b[0], entryPortal.b[1], entryPortal.r, entryPortal.hue, { squash: 0.55, beam: true })
+    }
     if (state.phase === 'ready' && state.pickMode) drawPickReticle(entryPortal.b[0], entryPortal.b[1], entryPortal.r)
 
     // 발사 레인: 처음부터 포탈까지 곧게 뻗은 유리관 (폭이 절대 변하지 않는다)
